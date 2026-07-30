@@ -1,0 +1,2 @@
+﻿recordTimeUtc,simulationFrame,gameTime,buildingId,x,y,z,angleY,widthCells,lengthCells,sizeX,sizeY,sizeZ,centerOffsetX,centerOffsetY,centerOffsetZ,minY,maxY,prefabName
+2026-06-23T04:36:24.3238874Z,12461871,2026-06-23T12:35:48.1847044+08:00,5290,1396.926,161.322,2405.491,409.02,2,4,10.191,39.565,15.158,0,0,0,160.357,162.176,H5 2x2 tenement03

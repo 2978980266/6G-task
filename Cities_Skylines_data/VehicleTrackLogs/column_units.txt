@@ -1,0 +1,14 @@
+Vehicle CSV columns
+
+recordTimeUtc: real-world record time in UTC. Unit: ISO datetime
+sessionSeconds: elapsed time since capture started. Unit: second
+simulationFrame: game simulation frame. Unit: frame
+gameTime: in-game time. Unit: in-game datetime
+vehicleId: tracked vehicle id. Unit: id
+x: vehicle world position on X axis. Unit: meter
+y: vehicle world position on Y axis, usually height. Unit: meter
+z: vehicle world position on Z axis. Unit: meter
+angleX: vehicle pitch angle. Unit: degree
+angleY: vehicle heading angle. Unit: degree
+speed: vehicle speed magnitude. Unit: meter per second
+prefabName: vehicle prefab/template name. Unit: text

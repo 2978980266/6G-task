@@ -1,0 +1,2 @@
+﻿recordTimeUtc,simulationFrame,gameTime,buildingId,x,y,z,angleY,widthCells,lengthCells,sizeX,sizeY,sizeZ,centerOffsetX,centerOffsetY,centerOffsetZ,minY,maxY,prefabName
+2026-06-10T03:15:11.2138871Z,12461871,2042-03-17T09:23:38.3639723,38573,1328.326,168.833,2332.621,409.019,3,3,21.443,87.695,12.702,0,0,0,167.636,169.445,H5 3x2 Highrise06

@@ -1,0 +1,2 @@
+﻿recordTimeUtc,simulationFrame,gameTime,buildingId,x,y,z,angleY,widthCells,lengthCells,sizeX,sizeY,sizeZ,centerOffsetX,centerOffsetY,centerOffsetZ,minY,maxY,prefabName
+2026-06-23T04:03:43.4797373Z,12461871,2026-06-23T12:02:45.2595037+08:00,28319,1289.862,169.588,2355.437,229.019,1,4,7.013,7.211,7.184,0,0,0,168.828,170.012,L5 1x1 Detached

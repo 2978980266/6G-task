@@ -1,0 +1,21 @@
+Building CSV columns
+
+recordTimeUtc: real-world record time in UTC. Unit: ISO datetime
+simulationFrame: game simulation frame. Unit: frame
+gameTime: in-game time. Unit: in-game datetime
+buildingId: tracked building id. Unit: id
+x: building base position on X axis. Unit: meter
+y: building base position on Y axis, usually height. Unit: meter
+z: building base position on Z axis. Unit: meter
+angleY: building rotation around vertical axis. Unit: degree
+widthCells: building footprint width in grid cells. Unit: cell
+lengthCells: building footprint length in grid cells. Unit: cell
+sizeX: building model size on X axis. Unit: meter
+sizeY: building model height. Unit: meter
+sizeZ: building model size on Z axis. Unit: meter
+centerOffsetX: model center offset on X axis relative to base point. Unit: meter
+centerOffsetY: model center offset on Y axis relative to base point. Unit: meter
+centerOffsetZ: model center offset on Z axis relative to base point. Unit: meter
+minY: minimum sampled height in the building footprint. Unit: meter
+maxY: maximum sampled height in the building footprint. Unit: meter
+prefabName: building prefab/template name. Unit: text

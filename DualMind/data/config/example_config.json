@@ -1,0 +1,26 @@
+﻿{
+  "scenario_name": "cities_skylines_intersection_stage1",
+  "trajectory_csv": "C:\\Users\\29789\\Desktop\\Cities_Skylines\\VehicleTrackLogs\\20260610_111511",
+  "building_csv": "C:\\Users\\29789\\Desktop\\Cities_Skylines\\BuildingTrackLogs\\20260610_111315",
+  "rsu": {
+    "x": 1365.0,
+    "y": 180.0,
+    "z": 2378.0
+  },
+  "channel": {
+    "bandwidth_hz": 100000000.0,
+    "tx_power_dbm": 30.0,
+    "noise_power_dbm": -84.0,
+    "path_loss_offset_db": 61.4,
+    "path_loss_exponent": 2.1,
+    "nlos_extra_loss_db": 25.0,
+    "min_distance_m": 1.0,
+    "min_rate_mbps": 10.0,
+    "building_cell_size_m": 8.0
+  },
+  "environment": {
+    "slot_seconds": 1.0,
+    "initial_aoi_seconds": 0.0,
+    "max_steps": null
+  }
+}

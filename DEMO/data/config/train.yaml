@@ -1,0 +1,75 @@
+scenario_name: cities_skylines_dualmind_demo_train # 场景名称，用于标识当前实验配置
+seed: 7 # 全局默认随机种子；命令行 --seed 仅用于临时覆盖
+trajectory_csv: D:\vscode\6G\Cities_Skylines_data\VehicleTrackLogs\20260623_151408 # 车辆轨迹数据目录或文件路径
+building_csv: D:\vscode\6G\Cities_Skylines_data\BuildingTrackLogs\20260623_151408 # 建筑快照数据目录或文件路径
+
+rsu:
+  x: 1350.894 # RSU 的世界坐标 x
+  y: 180.0 # RSU 的世界坐标 y，高度
+  z: 2386.964 # RSU 的世界坐标 z
+
+channel:
+  bandwidth_hz: 40000000.0 # 未显式分配资源时使用的兼容链路带宽，单位 Hz
+  tx_power_dbm: 26.0 # 未区分发送端时使用的兼容发射功率，单位 dBm
+  noise_power_dbm: -84.0 # 旧环境兼容噪声功率，任务环境优先使用噪声谱密度
+  noise_density_dbm_per_hz: -174.0 # 热噪声功率谱密度，单位 dBm/Hz
+  receiver_noise_figure_db: 10.0 # 接收机噪声系数，单位 dB
+  path_loss_offset_db: 61.4 # 路径损耗常数项；28 GHz 城市街谷近似可取这一量级
+  path_loss_exponent: 2.5 # 路径损耗指数；比理想 LOS 更保守
+  nlos_extra_loss_db: 35.0 # NLoS 额外损耗；城市街口对遮挡更保守
+  min_distance_m: 1.0 # 距离下限，避免极短距离导致数值异常，单位 m
+  min_rate_mbps: 1.0 # 诊断用最低速率门限；完整包交付仍由实际容量决定
+  implementation_margin_db: 6.0 # 实现余量，吸收波束跟踪误差、硬件损失和链路保守量，单位 dB
+  rate_efficiency_factor: 0.55 # 实际速率相对 Shannon 速率的效率系数
+  max_spectral_efficiency_bps_hz: 4.0 # 调制编码频谱效率上限，避免近距离 Shannon 峰值失真
+  building_cell_size_m: 8.0 # 建筑 footprint 栅格化时的兜底单元尺寸，单位 m
+  building_height_clearance_m: 1.0 # 建筑顶部额外遮挡裕量，单位 m
+  enable_vehicle_blockage: true # 是否启用车辆遮挡近似
+  vehicle_blockage_radius_m: 3.5 # 判断其他车辆是否位于链路走廊内的半径，单位 m
+  vehicle_blockage_loss_db: 22.0 # 车辆遮挡触发时附加的额外损耗，单位 dB
+  vehicle_blockage_height_m: 2.5 # 用于近似车辆高度的遮挡参数，单位 m
+
+environment:
+  initial_caoi_seconds: 0.0 # 所有车辆的全部 packet 在 episode 首帧从 AoI=0 开始
+  initial_caoi_min_seconds: null # null 表示关闭初始 CAoI 随机化
+  initial_caoi_max_seconds: null # null 表示关闭初始 CAoI 随机化
+  packet_count: 25 # 25 种独立信息包，编号为 1 到 25
+  packet_size_bits: 2400000.0 # 每类包 0.30 MB，只允许完整包交付
+  fallback_step_seconds: 0.3 # 首步或缺失时间戳时使用的默认 step 时长，单位 s
+  max_steps: null # 单个 episode 的最大步数，null 表示使用全部轨迹步
+  max_active_links: null # 单步允许的最大激活链路数，null 表示不额外限制
+  allow_multi_v2i_from_rsu: true # RSU 可并行服务多车，但受总资源块和总速率限制
+  age_tolerance_seconds: 8.0 # 论文 Table II 的 CAoI 容忍阈值 A
+
+resource:
+  rsu_total_bandwidth_hz: 40000000.0 # RSU 数据面总频谱，单位 Hz
+  rsu_resource_block_hz: 5000000.0 # 单个 V2I 资源块带宽，单位 Hz
+  rsu_total_rate_limit_mbps: 100.0 # 所有 V2I 实际速率之和上限，单位 Mbps
+  v2v_total_bandwidth_hz: 40000000.0 # V2V sidelink 总频谱，单位 Hz
+  v2v_resource_block_hz: 5000000.0 # 单个 V2V 资源块带宽，单位 Hz
+  v2v_total_rate_limit_mbps: 60.0 # 所有 V2V 实际速率之和上限，单位 Mbps
+  vehicle_link_rate_limit_mbps: 30.0 # 任一车辆参与的单条数据链路速率上限
+  max_resource_blocks_per_link: 2 # 单条链路最多分配两个资源块
+  rsu_tx_power_dbm: 26.0 # RSU 数据面发射功率，单位 dBm
+  vehicle_tx_power_dbm: 23.0 # 车辆 V2V 发射功率，单位 dBm
+
+tasks:
+  enabled: true
+  max_completed_tasks_per_vehicle: 3
+  cooldown_steps: 1
+  reward_base: 10.0
+  freshness_decay_seconds: 4.0
+  templates:
+    T1: 1,2,3,5,6,8,12
+    T2: 1,3,9,10,15,16,20
+    T3: 2,4,6,11,14,20,25
+    T4: 2,5,7,8,12,17,21,25
+    T5: 1,3,6,9,13,18,22,24
+    T6: 1,4,8,10,11,15,19,23
+    T7: 2,3,5,7,14,16,20,25
+    T8: 4,6,8,12,13,17,21,24
+
+autonomy:
+  enabled: false # 当前主线暂不划分自动驾驶车辆
+  penetration_rate: 0.0 # 关闭场景时保持为 0，后续启用时再配置
+  priority_weight: 1.0 # 当前使用中性权重，后续启用时再配置

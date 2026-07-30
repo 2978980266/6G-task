@@ -1,0 +1,21 @@
+# 鏈湴璇存槑涓庣紪杈戝櫒閰嶇疆
+AGENTS.md
+.vscode/
+
+# 甯歌涓存椂鏂囦欢銆佷緷璧栧拰鏈湴閰嶇疆
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+.env
+.env.*
+!.env.example
+Thumbs.db
+.DS_Store
+# 训练和实验生成的结果
+DEMO/outputs/
+
+# DualMind 自动生成的结果和打包元数据
+DualMind/outputs/
+*.egg-info/

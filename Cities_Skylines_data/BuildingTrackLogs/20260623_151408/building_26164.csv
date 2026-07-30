@@ -1,0 +1,2 @@
+﻿recordTimeUtc,simulationFrame,gameTime,buildingId,x,y,z,angleY,widthCells,lengthCells,sizeX,sizeY,sizeZ,centerOffsetX,centerOffsetY,centerOffsetZ,minY,maxY,prefabName
+2026-06-23T07:14:08.9686096Z,12461871,2026-06-23T15:13:32.7883961+08:00,26164,1301.789,164.523,2387.465,-40.981,5,5,8,20,8,0,0,0,163.894,168.521,Regular Playground

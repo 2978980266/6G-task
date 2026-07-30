@@ -1,0 +1,2 @@
+﻿recordTimeUtc,simulationFrame,gameTime,buildingId,x,y,z,angleY,widthCells,lengthCells,sizeX,sizeY,sizeZ,centerOffsetX,centerOffsetY,centerOffsetZ,minY,maxY,prefabName
+2026-06-23T07:14:08.9676096Z,12461871,2026-06-23T15:13:32.7883961+08:00,41665,1345.743,165.04,2407.566,139.02,2,2,15.497,57.343,15.602,0,0,0,164.146,165.098,H3 2x2 Office11
