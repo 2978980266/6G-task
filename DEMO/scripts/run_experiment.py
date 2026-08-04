@@ -26,7 +26,7 @@ from skylines_demo.policies import (
 # two-stage-task-relay-greedy
 # Old names remain aliases for compatibility.
 CONFIG_PATH = str(DEFAULT_CONFIG_PATH)
-POLICY = "max-task-reward-gain"
+POLICY = "random-task-aware"
 SUMMARY_JSON: str | None = None
 MODEL_PATH: str | None = None
 TOP_K: int | None = None
