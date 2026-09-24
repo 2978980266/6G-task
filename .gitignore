@@ -19,3 +19,8 @@ DEMO/outputs/
 # DualMind �Զ����ɵĽ���ʹ��Ԫ����
 DualMind/outputs/
 *.egg-info/
+
+# 本地计划与参考论文，不上传
+参考论文/
+建议.md
+总体思路.md
