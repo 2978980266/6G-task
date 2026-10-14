@@ -2,13 +2,17 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .config import ScenarioConfig, load_config
+from .config import ScenarioConfig, load_config, load_risk_config
 from .data import load_buildings, load_vehicle_replay
 from .env import RelaySchedulingEnv, TaskRelaySchedulingEnv
 from .geometry import BuildingLineOfSight
 from .types import BuildingSnapshot, VehicleReplay
 from .wireless import LogDistanceChannelModel
+
+if TYPE_CHECKING:
+    from .env.risk_comm_env import RiskCommEnv
 
 
 @dataclass(frozen=True)
@@ -73,4 +77,24 @@ def build_legacy_environment(
         environment_config=runtime.config.environment,
         autonomy_config=runtime.config.autonomy,
         seed=effective_seed,
+    )
+
+
+def build_risk_environment(
+    config_path: str | Path,
+    risk_config_path: str | Path | None = None,
+) -> "RiskCommEnv":
+    """Build the independent perception-risk communication environment."""
+
+    from .env.risk_comm_env import RiskCommEnv
+
+    runtime = load_runtime(config_path)
+    resolved_risk_config_path = (
+        Path(risk_config_path)
+        if risk_config_path is not None
+        else Path(config_path).with_name("risk.yaml")
+    )
+    return RiskCommEnv(
+        runtime=runtime,
+        risk_config=load_risk_config(resolved_risk_config_path),
     )

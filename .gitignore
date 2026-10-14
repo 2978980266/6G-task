@@ -1,24 +1,30 @@
-# 本地说明与编辑器配置
+# 本地接手说明与编辑器配置
 AGENTS.md
 .vscode/
 
-# 常见临时文件、依赖和本地配置
+# Python 临时文件、包元数据与本地依赖
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
 node_modules/
+
+# DEMO 检查缓存（合并原 DEMO/.gitignore，保持目录作用范围）
+/DEMO/**/.mypy_cache/
+/DEMO/**/.pytest_cache/
+/DEMO/**/.ruff_cache/
+
+# 本地环境配置；示例文件仍允许纳入版本控制
 .env
 .env.*
 !.env.example
 Thumbs.db
 .DS_Store
-# ѵ����ʵ�����ɵĽ��
-DEMO/outputs/
 
-# DualMind �Զ����ɵĽ���ʹ��Ԫ����
+# 训练与实验生成结果，保留旧参考工程规则
+/DEMO/**/outputs/
 DualMind/outputs/
-*.egg-info/
 
 # 本地计划与参考论文，不上传
 参考论文/

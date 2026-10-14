@@ -1,0 +1,22 @@
+risk_comm:
+  enabled: false
+  stage: 0
+  enable_v2v_relay: false
+  link_prediction: false
+  ego_eta_mode: causal-self-motion
+  uplink_slots_per_step: 2
+  downlink_slots_per_step: 2
+  relay_slots_per_step: 1
+  prediction_horizon_steps: 4
+  rsu_sensor_range_m: 120.0
+  rsu_sensor_fov_deg: 360.0
+  vehicle_sensor_range_m: 40.0
+  vehicle_sensor_fov_deg: 120.0
+  crossing_heading_min_deg: 45.0
+  crossing_heading_max_deg: 135.0
+  conflict_time_gap_seconds: 1.5
+  decision_lead_steps: 4
+  extrapolation_seconds: 1.5
+  risk_radius_m: 5.0
+  event_trigger_displacement_m: 5.0
+  conflict_cluster_radius_m: 8.0

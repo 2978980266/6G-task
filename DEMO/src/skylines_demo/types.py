@@ -23,6 +23,80 @@ class Vector3:
 
 
 @dataclass(frozen=True)
+class RiskSnapshot:
+    object_id: int
+    source_id: int
+    observation_step: int
+    x: float
+    y: float
+    z: float
+    speed: float
+    heading_deg: float
+    velocity_x: float | None
+    velocity_z: float | None
+    received_step: int | None
+    velocity_previous_observation_step: int | None = None
+    velocity_basis: str | None = None
+
+    @property
+    def position(self) -> Vector3:
+        return Vector3(self.x, self.y, self.z)
+
+    def age_at(self, current_step: int) -> int:
+        if current_step < self.observation_step:
+            raise ValueError("current_step cannot precede observation_step.")
+        return current_step - self.observation_step
+
+
+@dataclass(frozen=True)
+class LinkForecast:
+    receiver_id: int
+    current_step: int
+    predicted_steps: tuple[int, ...]
+    reachable_steps: tuple[int, ...]
+    first_unreachable_step: int | None
+    available: bool
+
+
+@dataclass(frozen=True)
+class UplinkAction:
+    sender_id: int
+    object_id: int
+
+
+@dataclass(frozen=True)
+class DownlinkAction:
+    receiver_id: int
+    object_id: int
+
+
+@dataclass(frozen=True)
+class RelayAction:
+    sender_id: int
+    receiver_id: int
+    object_id: int
+
+
+@dataclass(frozen=True)
+class RiskSchedulingAction:
+    uplinks: tuple[UplinkAction, ...] = ()
+    downlinks: tuple[DownlinkAction, ...] = ()
+    relays: tuple[RelayAction, ...] = ()
+
+    @property
+    def transmitting_vehicle_ids(self) -> tuple[int, ...]:
+        return tuple(action.sender_id for action in self.uplinks) + tuple(
+            action.sender_id for action in self.relays
+        )
+
+    @property
+    def receiving_vehicle_ids(self) -> tuple[int, ...]:
+        return tuple(action.receiver_id for action in self.downlinks) + tuple(
+            action.receiver_id for action in self.relays
+        )
+
+
+@dataclass(frozen=True)
 class VehicleSnapshot:
     vehicle_id: int
     position: Vector3
@@ -30,6 +104,54 @@ class VehicleSnapshot:
     angle_x: float
     angle_y: float
     prefab_name: str
+
+
+@dataclass(frozen=True)
+class RiskTaskView:
+    task_id: str
+    vehicle_id: int
+    conflict_point_id: int
+    conflict_point: Vector3
+    crossing_step: int
+    decision_step: int
+
+
+@dataclass(frozen=True)
+class RiskVehicleState:
+    vehicle_id: int
+    snapshot: VehicleSnapshot
+    visible_object_ids: tuple[int, ...]
+    known_object_ids: tuple[int, ...]
+    data_plane_object_ids: tuple[int, ...]
+    caoi_steps: float | None
+    # Own causal motion is control information, never a forwardable object.
+    self_snapshot: RiskSnapshot | None = None
+
+
+@dataclass(frozen=True)
+class RiskObservation:
+    step_index: int
+    simulation_frame: int
+    game_time: str
+    record_time_utc: str
+    elapsed_seconds: float
+    delta_seconds: float
+    active_vehicles: tuple[RiskVehicleState, ...]
+    tasks: tuple[RiskTaskView, ...]
+    uplink_candidates: tuple[UplinkAction, ...]
+    downlink_candidates: tuple[DownlinkAction, ...]
+    relay_candidates: tuple[RelayAction, ...]
+    rsu_known_object_ids: tuple[int, ...]
+    # The following fields make the information available to policies explicit.
+    # They are deliberately snapshots of the public observation, rather than
+    # references to a communication environment's private caches.
+    rsu_snapshots: tuple[RiskSnapshot, ...] = ()
+    receiver_known_observation_steps: tuple[tuple[int, int, int], ...] = ()
+    last_sent_snapshots: tuple[tuple[int, RiskSnapshot], ...] = ()
+    step_times: tuple[float, ...] = ()
+    rsu_position: Vector3 = Vector3(0.0, 0.0, 0.0)
+    link_forecasts: tuple[tuple[int, int, LinkForecast], ...] = ()
+    rsu_visible_object_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)

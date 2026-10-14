@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 try:
     import yaml  # type: ignore[import-untyped]
@@ -249,6 +249,101 @@ class AutonomyConfig:
             penetration_rate=float(payload.get("penetration_rate", 0.0)),
             priority_weight=float(payload.get("priority_weight", 2.0)),
         )
+
+
+@dataclass(frozen=True)
+class RiskCommConfig:
+    enabled: bool = False
+    stage: int = 0
+    enable_v2v_relay: bool = False
+    link_prediction: bool = False
+    uplink_slots_per_step: int = 2
+    downlink_slots_per_step: int = 2
+    relay_slots_per_step: int = 1
+    prediction_horizon_steps: int = 4
+    rsu_sensor_range_m: float = 120.0
+    rsu_sensor_fov_deg: float = 360.0
+    vehicle_sensor_range_m: float = 40.0
+    vehicle_sensor_fov_deg: float = 120.0
+    crossing_heading_min_deg: float = 45.0
+    crossing_heading_max_deg: float = 135.0
+    conflict_time_gap_seconds: float = 1.5
+    decision_lead_steps: int = 4
+    extrapolation_seconds: float = 1.5
+    risk_radius_m: float = 5.0
+    event_trigger_displacement_m: float = 5.0
+    conflict_cluster_radius_m: float = 8.0
+    ego_eta_mode: str = "public-crossing-step"
+
+    def __post_init__(self) -> None:
+        self.validate()
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any] | None = None) -> "RiskCommConfig":
+        raw_payload = dict(payload or {})
+        nested_payload = raw_payload.get("risk_comm")
+        if nested_payload is not None:
+            if not isinstance(nested_payload, Mapping):
+                raise ValueError("risk_comm must be a mapping.")
+            raw_payload = dict(nested_payload)
+
+        allowed_names = {field.name for field in fields(cls)}
+        unknown_names = sorted(set(raw_payload) - allowed_names)
+        if unknown_names:
+            raise ValueError(f"Unknown risk_comm fields: {unknown_names}")
+
+        defaults = cls()
+        values = {
+            field.name: getattr(defaults, field.name)
+            for field in fields(cls)
+        }
+        values.update(raw_payload)
+        config = cls(**values)
+        config.validate()
+        return config
+
+    def validate(self) -> None:
+        if self.ego_eta_mode not in {"public-crossing-step", "causal-self-motion"}:
+            raise ValueError("ego_eta_mode must be public-crossing-step or causal-self-motion.")
+        if self.stage < 0:
+            raise ValueError("stage must be non-negative.")
+        for name in (
+            "uplink_slots_per_step",
+            "downlink_slots_per_step",
+            "relay_slots_per_step",
+            "prediction_horizon_steps",
+            "decision_lead_steps",
+        ):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must be non-negative.")
+        for name in (
+            "rsu_sensor_range_m",
+            "vehicle_sensor_range_m",
+            "conflict_time_gap_seconds",
+            "extrapolation_seconds",
+            "risk_radius_m",
+            "conflict_cluster_radius_m",
+        ):
+            if getattr(self, name) <= 0.0:
+                raise ValueError(f"{name} must be positive.")
+        if self.event_trigger_displacement_m < 0.0:
+            raise ValueError("event_trigger_displacement_m must be non-negative.")
+        for name in ("rsu_sensor_fov_deg", "vehicle_sensor_fov_deg"):
+            value = getattr(self, name)
+            if value <= 0.0 or value > 360.0:
+                raise ValueError(f"{name} must be in (0, 360].")
+        if not 0.0 <= self.crossing_heading_min_deg < self.crossing_heading_max_deg <= 180.0:
+            raise ValueError(
+                "crossing heading bounds must satisfy 0 <= min < max <= 180."
+            )
+
+
+def load_risk_config(path: str | Path) -> RiskCommConfig:
+    payload = load_config_payload(path)
+    risk_payload = payload.get("risk_comm")
+    if not isinstance(risk_payload, Mapping):
+        raise ValueError("Risk config must contain a risk_comm mapping.")
+    return RiskCommConfig.from_mapping(payload)
 
 
 @dataclass(frozen=True)

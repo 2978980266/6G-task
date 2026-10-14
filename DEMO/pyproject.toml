@@ -2,7 +2,7 @@
 name = "skylines-dualmind-demo"
 version = "0.1.0"
 description = "Modular DEMO environment for a Cities: Skylines recreation of the Dual-Mind wireless task."
-readme = "README.md"
+readme = {text = "Cities: Skylines trajectory-based V2X experiments with task-aware packet CAoI, independent perception-risk communication, and a dedicated risk scheduler. Full usage and experiment documentation is maintained in the repository-root README.md.", content-type = "text/markdown"}
 requires-python = ">=3.10"
 dependencies = []
 
