@@ -1,6 +1,6 @@
 # 6G：面向车辆风险判断的感知信息通信调度实验平台
 
-本文于 **2026-10-14** 整理，实验与验收结果按各节记录的执行日期解读。当前设计、使用说明和有效实验结论统一保留在本 README；接手约束保留在根目录 `AGENTS.md`，不再单独维护两套文档目录。主工程位于 `DEMO/`，所有命令均从 `D:\vscode\6G` 执行。参数以 YAML 为准，原始实验依据保留在 `outputs/`。
+本文于 **2026-10-15** 更新，实验与验收结果按各节记录的执行日期解读。当前设计、使用说明和有效实验结论统一保留在本 README；接手约束保留在根目录 `AGENTS.md`，不再单独维护两套文档目录。主工程位于 `DEMO/`，所有命令均从 `D:\vscode\6G` 执行。参数以 YAML 为准，原始实验依据保留在 `outputs/`。
 
 项目使用《Cities: Skylines 1》导出的车辆轨迹和建筑快照，研究：**车辆感知受限、通信资源有限时，怎样选择信息内容、接收车辆、发送时机和传递路径，使通信更有效地服务交叉风险判断。** 调度器选择上报、下发、中继哪些对象快照以及何时停止发送；车辆使用实际掌握的信息和固定运动模型判断，环境再用真实轨迹评测。
 
@@ -17,6 +17,7 @@
 | 真实场景与风险环境 | 固定车辆轨迹、建筑遮挡、感知、快照缓存、逐跳通信和风险任务评测 | 当前场景为 16 辆车、18 个建筑、23 step、46 个风险任务 |
 | 风险模型与评分 | B 因果自身运动模型、A 额外权限对照、对象级严格损失与实际发送费用 | 模型修整已结束，任务、真值和阈值冻结；已知失败继续保留 |
 | 规则通信实验 | 普通策略、期限停止、版本/需求上报、中继及费用配对 | B 中需求上报将 57 次发送降至 16 次，全部任务评分不变；中继减少部分负任务弃权，真对象成功仍为 6/8，详见第 6 节 |
+| 固定 B 离线 oracle | 完整合法动作搜索、原环境回放、必要接收次数证明 | 开中继证得全局最优 JΣ=11.14；关中继最好合法 JΣ=12.10、有效界 11.37≤J*≤12.10，未证明最优；详见第 6 节 |
 | 专用风险学习器 | S0 有限回合 PPO、合法组合与 STOP、模型保存/重载、四组短流程验证 | 四组烟雾终态贪心均 STOP、零发送；尚未证明学习性能收益，详见第 7 节 |
 | 固定预算训练 | 已实现运行入口并明确预算、seed 与评估合同 | 200 回合/模型的固定训练尚未执行，须后续明确指令 |
 | 动作域扩展与泛化 | 已明确后续条件 | S1 尚未实现，独立新场景验证尚未开展 |
@@ -48,6 +49,7 @@
     ├── data/config/              # train.yaml 与 risk.yaml
     ├── src/skylines_demo/        # 场景、几何、信道、环境、策略和学习器
     ├── scripts/                  # 检查、回放、对比、训练和评估入口
+    ├── oracle_experiments/       # 固定B离线求解、证书与独立检查；在学习器源码冻结集合外
     └── outputs/                  # 本地模型、日志、JSONL 与实验结果，Git 忽略
 ```
 
@@ -207,6 +209,36 @@ A 是自身行程权限增强对照，单列如下；其额外权限不能解释
 
 `risk-1380-5-3` 也说明二值答案的局限：B 无通信时已经因错误对象报警，普通 RSU 下行又补到了真实对象 15325，但 outcome 没变。这是对象依据恢复，不能写成旧漏报下降或中继独有收益。反事实须完整重演无通信回合和速度估计，不能删除通信缓存后仍保留通信学到的速度。
 
+### 固定 B 离线 oracle（2026-10-15）
+
+新增 `DEMO/oracle_experiments/`，仅求默认 `20260623_151408` 会话的 B、预测关闭两组。仍为 16 车/18 建筑/23 step/46 任务；关中继 2U+2D、开中继 2U+2D+1R。离线调度器读取完整未来、真值和相关对象，车辆仍由原 `RiskCommEnv` 根据实际合法缓存执行固定 B 判断。原 `diagnostic-oracle` 不变；本问题使用环境完整合法动作（含空动作），不套 S0、不实施 S1 学习。
+
+| 离线设置 | F | FP | A⁻ | U/D/R | M | LΣ | JΣ | 最优性 |
+|---|---:|---:|---:|---|---:|---:|---:|---|
+| 关中继最好合法方案 | 2 | 0 | 8 | 0/10/0 | 10 | 12.00 | **12.10** | **未证明；11.37≤J*≤12.10** |
+| 开中继最优 oracle | 2 | 0 | 4 | 0/11/3 | 14 | 11.00 | **11.14** | **全局最优；LB=UB=11.14** |
+
+无通信及相关规则均重新从原环境 reset 回放。关组相对需求上报 15.66，ΔLΣ=-3.50、0.01ΔM=-0.06，ΔJΣ=-3.56；开组相对需求中继 14.82，分别为 -3.50、-0.18、-3.68。比较本次两个离线方案，负弃权 8→4、损失少 1.00，但多 4 次发送、费用多 0.04，JΣ 少 0.96。真对象成功均为 6/8，另两项正失败和 step 0 损失继续保留。开组最优 11.14 低于关组有效 LB=11.37，故真正最优目标的中继收益至少 0.23；两个可行方案之差 0.96 不能当作最优值之差。
+
+搜索直接调用原 `step`，仅把固定可见性和信道 reachable 查表加速；分支独立复制缓存、本地/自身历史、来源、版本、接收时序、估速依据、发送历史和计分。完整有序联合动作懒枚举保留同对象上报顺序，不做“越新越好”剪枝。严格下降的单消息、U+D 及补过去位置后刷新缓存的联合邻域只提供 UB。只有完整搜索结束或有效 LB 与合法 UB 相等才标最优。
+
+**开组证明来自必要接收次数，而非穷举结束。** 先放宽路径、容量和缓存耦合，允许逐对象/逐任务独立选择所有可能快照及过去估速位置，得到任务损失 LB=11.00。该松弛仍确认 `risk-10697-11-1`、`risk-4966-5-2` 各至少损失 5，以及四项 B 自身不可预测负任务各至少损失 0.25；不扣初始常数。
+
+零接收车的缓存/估速与无通信相同；每次 D/R 只对应一个接收车，上行费非负。因此其他接收车贡献至少 `min(无接收损失, 松弛损失+0.01)`，合计 **10.87**。关键车 7019 在期限 1 首次本地看到 13138、缺过去位置；要消除此弃权，必须 step 0 收到 13138@0。其他对象不能补它的速度或删除这个本地未知对象，误报只会更差。该旧快照缺速度，纯本地刷新不替换数据面留存；全回合仅此一次接收时，期限 18 失见后又会弃权或更差误报，期限 12 另有固定自身不可预测弃权。故开组该车贡献至少 `min(0.50,0.50+0.01,0.25+0.02)=0.27`，总 LB=**11.14**，恰被合法方案达到。三种 step 0 中继来源均有原环境完整回放；证明条件由 `certificates.py` 检查。
+
+关组 step 0 没有该对象到 7019 的下行，上行再下行最早 step 2 可用，无法改善期限 1。该车损失至少 0.50，总 LB=10.87+0.50=**11.37**。关组与 UB=12.10 的差距为 **0.73**，按 `(UB-LB)/UB` 为 **6.03%**。
+
+首次预算为每组 600 秒、主搜索 500000 次状态推进、1024 MiB 进程保护。关组实际 **270.22 秒/388944 次推进**（分支定界节点 113922）因内存保护停止：初版 Windows 监测器反复创建 ctypes 类型导致累积，已修复并加回归检查，**没有重跑或追加关组预算**，不能据此推断搜索算法本身需要 1 GiB。开组主搜索 **504.71 秒/500000 次推进**（分支定界节点 225001）、峰值约 38.59 MiB，以节点上限停止，原始主搜索 UB=11.37/LB=11.00。另在同一首次预算内进行的联合检查于约 **432.50 秒**找到 11.14；辅助优化 69 次世界状态推进，合计 500069，组合节点保护上限 500523。随后原环境复核和数学证书闭合，没有第二轮完整优化。
+
+本次最终结果以 **`certified_summary.json`、`receiver_bound_certificate.json`、`certified_best/`** 为准：
+
+- [关中继认证](DEMO/outputs/offline_oracle_B_off_20261015_01/certified_summary.json)、[完整动作](DEMO/outputs/offline_oracle_B_off_20261015_01/certified_best/actions.jsonl)、[逐步证据](DEMO/outputs/offline_oracle_B_off_20261015_01/certified_best/replay.jsonl)。
+- [开中继认证](DEMO/outputs/offline_oracle_B_on_20261015_01/certified_summary.json)、[完整动作](DEMO/outputs/offline_oracle_B_on_20261015_01/certified_best/actions.jsonl)、[逐步证据](DEMO/outputs/offline_oracle_B_on_20261015_01/certified_best/replay.jsonl)、[最优性证明及单接收回放](DEMO/outputs/offline_oracle_B_on_20261015_01/optimality_certificate/certificate.json)。
+
+原始 `summary.json`、`manifest.json`、`solver_source/` 不改写；认证源码另存 `certification_manifest.json`、`certification_source/`。所有持久化中间方案、基线和最终方案都从原环境 reset 回放全部 23 step/46 任务，核对动作、逐跳投递、缓存/估速历史、task_scores 与实际费用。当前入口已集成证书、联合邻域和中间方案回放，集成后通过小实例验证，遵守预算未再启动完整优化。既有 src/scripts/YAML/sidecar 未改，旧学习器完整冻结清单与 B 烟雾 sidecar 仍一致。
+
+首步合法有序组合已有关/开 **11,464,138 / 750,814,968** 个，历史状态还随来源与估速分化，本次记忆命中为零。关组进一步精确求解需加强实际接触/时序容量下界、证明状态压缩或改进分支顺序，并另获预算；beam、候选截断和新鲜度支配不能用于最优证明。上述证书和动作只适用于冻结固定场景，不证明在线可实现性、学习收益或泛化。本次未运行 A、PPO/S1 或新场景。
+
 ## 7. 专用风险通信学习器：实现与实际进展
 
 2026-10-10 已实施 `DEMO/src/skylines_demo/risk_learning/`，学习上报、下发、中继消息的选择与 STOP，保持风险模型和评分固定。它是专用有限回合 PPO，不复用旧 SB3 的 25 包任务编码。
@@ -284,6 +316,21 @@ python DEMO/scripts/audit_risk_model.py --ego-eta-mode public-crossing-step --ou
 ```
 
 JSONL 只写逐 step 记录，包含动作、投递、判断、计分和下一状态；终止/截断标志及总摘要由 `--json` 提供。`--steps 0 --jsonl` 产生空文件，零步目录与待结算情况需查看摘要。A 的普通 compare/trace 可使用独立风险配置副本，只修改 `ego_eta_mode` 后传入 `--risk-config`，其余参数固定；学习与固定研究入口自行显式选择模式。
+
+### 固定 B 离线 oracle 的两个入口
+
+每组使用全新目录。再次完整求解须另获明确预算指令，阅读示例不自动执行：
+
+```powershell
+$oracleRoot = "DEMO/outputs/offline_oracle_B_" + (Get-Date -Format 'yyyyMMdd_HHmmss_fffffff')
+$env:PYTHONUTF8 = '1'
+python DEMO/oracle_experiments/solve_b_no_relay.py --output-dir ($oracleRoot + '/off') --seconds 600 --node-limit 500000 --memory-mib 1024
+python DEMO/oracle_experiments/solve_b_with_relay.py --output-dir ($oracleRoot + '/on') --seconds 600 --node-limit 500000 --memory-mib 1024 --seed-plan ($oracleRoot + '/off/best/actions.jsonl')
+# 合成穷举、语义与证书检查；不启动完整优化
+python DEMO/oracle_experiments/check_oracle.py
+```
+
+`--seconds` 仅接受 `(0,600]`；达到节点/内存/时间限制就保存停止，已有输出拒绝覆盖。开组 `--seed-plan` 可省略；给出时必须为无 R 的完整 23 步方案并严格回放。当前入口的 `summary.json` 直接报告证书界和证明状态，`best/` 保存动作；本次早期主搜索与最终认证记录的区别见第 6 节。默认 YAML 不写回，不训练。
 
 ### 学习合同检查与小烟雾
 
@@ -373,6 +420,7 @@ python DEMO/scripts/run_experiment.py --policy ppo --model-path DEMO/outputs/ppo
 | `risk_learning/domain.py`、`encoding.py`、`actions.py` | S0 白名单投影、32/6 编码与合法自回归组合 |
 | `risk_learning/policy.py`、`rollout.py`、`training.py` | 网络、完整回合回报与有限 PPO |
 | `risk_learning/metadata.py`、`evidence.py` | 严格模型合同、内容冻结、对象/路径/费用证据 |
+| `DEMO/oracle_experiments/`，在 src 外 | 两个固定B离线入口、完整动作搜索、必要接收次数证明与独立验证 |
 | `env/task_relay_env.py`、`tasks/`、`policies/task_policy.py`、`rl/` | 旧 25 包任务线及其 SB3 PPO |
 | `env/relay_env.py`、`rl/common.py` | 更早的 CAoI/离散动作兼容实现，非默认主入口 |
 
@@ -399,6 +447,8 @@ D:\Anaconda\python.exe -m mypy DEMO/src
 
 当前机器曾出现 Anaconda NumPy 与用户 Torch 的 OpenMP 导入顺序冲突。新学习入口延迟加载并先 NumPy 后 Torch，不使用 `KMP_DUPLICATE_LIB_OK`。Python 启动器可能打印既有路径诊断，须结合退出码和完整日志判断。Anaconda 的 mypy 模块入口可用于此前 mypy.exe DLL 问题；不要因默认 Python 缺静态检查依赖而跳过检查。
 
+2026-10-15 离线 oracle 检查位于 `oracle_experiments/check_oracle.py`，覆盖独立穷举最优值 5.01、共享费用、空动作/截止/初始损失/末步费用、来源/同版本顺序/估速历史、中继时延/冲突、新快照使负任务变差、预算保护、原环境/查表一致性及固定场景证明条件。未恢复 `DEMO/tests`。风险规则、场景、中继检查及冻结复核另有日志；未运行会同时评估 A 的学习/机制套件。最终日志见 `DEMO/outputs/offline_oracle_validation_20261015_final/`。
+
 ## 12. 当前边界与后续工作
 
 已有证据支持可运行平台、固定场景内冗余上报筛选和部分中继减少弃权。任务相关调度是否稳定优于其他方法、学习是否改善目标、结果是否泛化，仍需研究。
@@ -422,6 +472,7 @@ S1 `all-legal-snapshot-domain-v1` 尚未实现，只有后续明确允许扩集�
 | 严格计分、回报与重复一致性 | [计分回归记录](DEMO/outputs/risk_objective_20261009_164717_604029/regression_verified.json)；同目录有 compare/trace 完整回放 |
 | 固定 B/A 规则、预算与对象路径配对 | [最终汇总](DEMO/outputs/risk_fixed_b_comm_20261009_171625_3029627/study_final/summary.json)、[配对索引](DEMO/outputs/risk_fixed_b_comm_20261009_171625_3029627/study_final/pair_index.json) |
 | 专用学习器验收、模型与全部烟雾结果 | [执行报告](DEMO/outputs/risk_learning_20261010_112722_812903/report.md)、[交付索引](DEMO/outputs/risk_learning_20261010_112722_812903/artifact_index.json)、[消息证据索引](DEMO/outputs/risk_learning_20261010_112722_812903/delivery_index.json) |
+| 固定 B 离线 oracle | [关中继认证](DEMO/outputs/offline_oracle_B_off_20261015_01/certified_summary.json)、[开中继认证](DEMO/outputs/offline_oracle_B_on_20261015_01/certified_summary.json)；各目录保留原始搜索和认证来源 |
 
 源码/数据的集合指纹是相对路径到 SHA256 字典的排序紧凑 JSON 哈希，不是 Git commit ID；严格冻结与模型合同以 `risk_learning/metadata.py` 和 sidecar 为准。本次文档整理不修改实验源码、数据、模型或既有输出，也不改旧模型 sidecar。
 
