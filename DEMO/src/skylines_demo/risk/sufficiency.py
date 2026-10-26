@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from ..config import RiskCommConfig
 from ..types import DownlinkAction, RiskObservation, RiskTaskView
-from .model import own_schedule_eta, predict_pair
+from .rsu_knowledge import predict_receiver_pair, public_task_eta
 
 
 @dataclass(frozen=True)
@@ -62,14 +62,9 @@ def predicted_object_distance_to_task(
     snapshot = next((s for s in observation.rsu_snapshots if s.object_id == candidate.object_id), None)
     if snapshot is None:
         return float("inf")
-    receiver = next((v for v in observation.active_vehicles
-                     if v.vehicle_id == candidate.receiver_id), None)
-    if receiver is None:
-        return float("inf")
-    prediction = predict_pair(
-        receiver.self_snapshot, snapshot, task.conflict_point, observation.elapsed_seconds,
-        observation.step_times[:observation.step_index + 1], config,
-        own_schedule_eta(config, task.crossing_step, observation.step_index, observation.delta_seconds),
+    prediction = predict_receiver_pair(
+        observation, candidate.receiver_id, candidate.object_id, task.conflict_point, config,
+        public_task_eta(config, task, observation.step_index, observation.delta_seconds),
     )
     return (prediction.distance_m if prediction.risk and prediction.distance_m is not None
             else float("inf"))

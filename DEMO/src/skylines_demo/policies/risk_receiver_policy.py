@@ -16,10 +16,9 @@ def select_receiver_value_action(
 ) -> RiskSchedulingAction:
     """Rank downlinks by public receiver-side information value.
 
-    The score uses only current task deadlines, current receiver geometry,
-    known observation versions, and the RSU snapshots already exposed by the
-    observation.  It intentionally does not inspect conflict truth or future
-    replay frames.
+    The receiver motion, like the object motion, comes only from the RSU's
+    legal snapshots with their original ages. Private vehicle self motion is
+    unavailable here. Public deadlines and version summaries remain controls.
     """
 
     prediction_enabled = (

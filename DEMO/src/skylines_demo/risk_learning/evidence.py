@@ -11,6 +11,7 @@ from typing import Any, Callable
 from ..config import RiskCommConfig
 from ..env.risk_comm_env import RiskCommEnv, RiskStepResult
 from ..risk.scoring import OBJECTIVE_WEIGHTS
+from ..risk.rsu_knowledge import rsu_information_contract
 from ..types import RiskObservation, RiskSchedulingAction
 from .actions import append_choice, initial_state, legal_mask, to_environment_action
 from .domain import build_safe_step
@@ -67,6 +68,7 @@ def action_from_path(step: Any, path: ActionPath) -> RiskSchedulingAction:
 
 def step_payload(result: RiskStepResult) -> dict[str, Any]:
     return dict(observation=asdict(result.observation), action={**asdict(result.action), "invalid": result.invalid_action},
+                offline_world_diagnostics=asdict(result.world_diagnostics) if result.world_diagnostics else None,
                 event_results=[asdict(e) for e in result.event_results],
                 risk_decisions=[{"task_id": key, "decision": asdict(d)} for key, d in result.risk_decisions],
                 task_scores=[asdict(s) for s in result.feedback.task_scores],
@@ -129,6 +131,7 @@ def finish_episode(steps: list[dict[str, Any]], config: RiskCommConfig,
     legacy["mean_caoi_steps"] = sum(ages) / len(ages) if ages else None
     legacy["mean_zero_receive_vehicle_count"] = sum(s["caoi"]["zero_receive_vehicle_count"] for s in steps) / len(steps)
     run = dict(steps=steps, event_results=events, task_scores=scores, objective=objective,
+               rsu_information_contract=rsu_information_contract(),
                legacy=legacy, risk_config=asdict(config), episode_terminated=True,
                episode_truncated=False, invalid_action_count=0,
                strict_failure_evidence=[dict(score=s, event=next(e for e in events if e["task_id"] == s["task_id"]))

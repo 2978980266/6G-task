@@ -29,6 +29,8 @@ from skylines_demo.policies.risk_public_uplink import select_public_uplink_actio
 from skylines_demo.policies.risk_receiver_policy import select_receiver_value_action
 from skylines_demo.policies.risk_relay_policy import select_receiver_value_with_relay_action
 from skylines_demo.risk.model import model_version
+from skylines_demo.risk.rsu_knowledge import rsu_information_contract
+from skylines_demo.risk_learning.source_contract import validate_frozen_sources
 from skylines_demo.types import DownlinkAction, RelayAction, RiskSchedulingAction, UplinkAction
 
 
@@ -81,8 +83,7 @@ def manifest(env):
     solver_sources = {p.relative_to(REPO).as_posix(): file_hash(p)
                       for p in sorted(Path(__file__).parent.glob("*.py"))}
     config_hashes = {name: file_hash(ROOT / "data/config" / name) for name in ("train.yaml", "risk.yaml")}
-    if fingerprint(frozen) != "22cfca1e19e86fff1a1fcf243fd933c55e859f3db47de3b544178d9e5062c94c":
-        raise ValueError("既有冻结源码漂移；停止，不修改 sidecar。")
+    source_contract = validate_frozen_sources(frozen)
     if fingerprint(data) != "ca0f35c80f944dc77bbac09e86737383468575f82fc52e44247948eb8b047af1":
         raise ValueError("默认数据漂移。")
     if config_hashes != {"train.yaml": "9932058fa2ee8aecbc604f5ee73019afc04bc5c60c96d906235d36b4c21b653c",
@@ -95,6 +96,7 @@ def manifest(env):
         raise ValueError("场景计数漂移。")
     return dict(source_hashes=sources, source_fingerprint=fingerprint(sources),
                 frozen_source_fingerprint=fingerprint(frozen), data_hashes=data, data_fingerprint=fingerprint(data),
+                source_contract=source_contract, rsu_information_contract=rsu_information_contract(),
                 solver_source_hashes=solver_sources, solver_source_fingerprint=fingerprint(solver_sources),
                 config_hashes=config_hashes, task_fingerprint=fingerprint(asdict(env.catalog)),
                 scenario_config=asdict(env._runtime.config), effective_risk_config=asdict(env._risk_config),

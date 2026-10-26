@@ -31,6 +31,7 @@ from skylines_demo.policies.risk_relay_policy import (
 )
 from skylines_demo.risk.conflicts import ConflictCatalog
 from skylines_demo.risk.model import model_version, own_information_permission
+from skylines_demo.risk.rsu_knowledge import rsu_information_contract
 from skylines_demo.risk.sufficiency import (
     prediction_triggered_task,
 )
@@ -345,6 +346,7 @@ def run_policy(
     metrics["effective_risk_config"] = asdict(effective_config)
     metrics["risk_model_version"] = model_version(effective_config)
     metrics["own_information_permission"] = own_information_permission(effective_config)
+    metrics["rsu_information_contract"] = rsu_information_contract()
     metrics["model_event_area_radius_m"] = effective_config.conflict_cluster_radius_m
     events = metrics["event_results"]
     metrics["positive_abstention_count"] = sum(e["true_risk"] and e["abstained"] for e in events)
@@ -410,6 +412,7 @@ def build_comparison_summary(
         "risk_config": asdict(risk_config),
         "risk_model_version": model_version(risk_config),
         "own_information_permission": own_information_permission(risk_config),
+        "rsu_information_contract": rsu_information_contract(),
         "decision_rule": "crossing_heading_and_estimated_passage_gap_unknown_motion_abstains",
         "communication_rule": "channel_reachable_without_packet_or_resource_budgets",
         "caoi_version_rule": "last_data_plane_received_version",

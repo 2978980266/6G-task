@@ -17,6 +17,7 @@ if str(SRC) not in sys.path:
 from skylines_demo.bootstrap import load_runtime
 from skylines_demo.config import RiskCommConfig, load_risk_config
 from skylines_demo.risk.model import model_version, own_information_permission
+from skylines_demo.risk.rsu_knowledge import rsu_information_contract
 from skylines_demo.env.risk_comm_env import RiskCommEnv, RiskStepResult
 from skylines_demo.policies.risk_baselines import (
     select_age_action,
@@ -56,6 +57,7 @@ def _snapshot_payload(snapshot: Any) -> dict[str, object]:
 def _observation_payload(observation: RiskObservation) -> dict[str, object]:
     return {
         "step_index": observation.step_index,
+        "information_contract": observation.information_contract,
         "simulation_frame": observation.simulation_frame,
         "elapsed_seconds": observation.elapsed_seconds,
         "delta_seconds": observation.delta_seconds,
@@ -72,12 +74,10 @@ def _observation_payload(observation: RiskObservation) -> dict[str, object]:
         "active_vehicles": [
             {
                 "vehicle_id": state.vehicle_id,
-                "position": asdict(state.snapshot.position),
                 "visible_object_ids": state.visible_object_ids,
                 "known_object_ids": state.known_object_ids,
                 "data_plane_object_ids": state.data_plane_object_ids,
                 "caoi_steps": state.caoi_steps,
-                "self_snapshot": asdict(state.self_snapshot) if state.self_snapshot else None,
             }
             for state in observation.active_vehicles
         ],
@@ -137,6 +137,8 @@ def _action_payload(action: RiskSchedulingAction) -> dict[str, object]:
 def _step_payload(result: RiskStepResult) -> dict[str, object]:
     return {
         "observation": _observation_payload(result.observation),
+        "offline_world_diagnostics": (asdict(result.world_diagnostics)
+                                      if result.world_diagnostics else None),
         "control_plane": {
             "rsu_known_object_ids": result.observation.rsu_known_object_ids,
             "tasks": [asdict(task) for task in result.observation.tasks],
@@ -223,6 +225,7 @@ def build_trace(
         "risk_config": asdict(risk_config),
         "risk_model_version": model_version(risk_config),
         "own_information_permission": own_information_permission(risk_config),
+        "rsu_information_contract": rsu_information_contract(),
         "communication_rule": "channel_reachable_without_packet_or_resource_budgets",
         "caoi_version_rule": "last_data_plane_received_version",
         "error_cause_rule": "exclusive_communication_model_mixed",

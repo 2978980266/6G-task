@@ -1,6 +1,6 @@
 # 6G：面向车辆风险判断的感知信息通信调度实验平台
 
-本文于 **2026-10-16** 更新，实验与验收结果按各节记录的执行日期解读。当前设计、使用说明和有效实验结论统一保留在本 README；接手约束保留在根目录 `AGENTS.md`，不再单独维护两套文档目录。主工程位于 `DEMO/`，所有命令均从 `D:\vscode\6G` 执行。参数以 YAML 为准，原始实验依据保留在 `outputs/`。
+本文于 **2026-10-26** 更新，实验与验收结果按各节记录的执行日期及权限合同解读。当前设计、使用说明和有效实验结论统一保留在本 README；接手约束保留在根目录 `AGENTS.md`，不再单独维护两套文档目录。主工程位于 `DEMO/`，所有命令均从 `D:\vscode\6G` 执行。参数以 YAML 为准，原始实验依据保留在 `outputs/`。
 
 项目使用《Cities: Skylines 1》导出的车辆轨迹和建筑快照，研究：**车辆感知受限、通信资源有限时，怎样选择信息内容、接收车辆、发送时机和传递路径，使通信更有效地服务交叉风险判断。** 调度器选择上报、下发、中继哪些对象快照以及何时停止发送；车辆使用实际掌握的信息和固定运动模型判断，环境再用真实轨迹评测。
 
@@ -16,6 +16,7 @@
 |---|---|---|
 | 真实场景与风险环境 | 固定车辆轨迹、建筑遮挡、感知、快照缓存、逐跳通信和风险任务评测 | 当前场景为 16 辆车、18 个建筑、23 step、46 个风险任务 |
 | 风险模型与评分 | B 因果自身运动模型、A 额外权限对照、对象级严格损失与实际发送费用 | 模型修整已结束，任务、真值和阈值冻结；已知失败继续保留 |
+| RSU 运动权限隔离，2026-10-26 | 独立在线观测、合法接收车估计、合法快照窗口预测及独立世界诊断 | 合同 `rsu-legal-knowledge-v1`；车端模型和物理执行不变，旧模型拒绝在新合同加载 |
 | 规则通信实验 | 普通策略、期限停止、版本/需求上报、中继及费用配对 | B 中需求上报将 57 次发送降至 16 次，全部任务评分不变；中继减少部分负任务弃权，真对象成功仍为 6/8，详见第 6 节 |
 | 固定 B 离线 oracle | 完整合法动作搜索、原环境回放、必要接收次数证明 | 开中继证得全局最优 JΣ=11.14；关中继最好合法 JΣ=12.10、有效界 11.37≤J*≤12.10，未证明最优；详见第 6 节 |
 | 专用风险学习器 | S0 有限回合 PPO、合法组合与 STOP、模型保存/重载、四组短流程验证 | 四组烟雾终态贪心均 STOP、零发送；尚未证明学习性能收益，详见第 7 节 |
@@ -88,6 +89,23 @@ DEMO 打包使用 `pyproject.toml` 内联的简短包说明，完整文档集中
 | 中继 R | 车辆把合法掌握的快照转发给另一车辆 | 显式开启时 1，默认关闭 |
 
 任一车辆同 step 最多参与一条数据链路；禁止向接收车发送它自己的对象信息。非法动作整体失败，不做部分投递。控制面理想可靠、不占数据名额，也不计发送费用。
+
+**当前普通 RSU 的运动知识合同为 `rsu-legal-knowledge-v1`。** `reset()`、`current_observation`、每步的 `observation` / `next_observation` 均为独立 `RSUObservation`；`RiskObservation` 只保留为此安全类型的名称别名。其运动载荷只有 RSU 本 step 传感器实际可见的快照，以及此前实际收到并保留的快照。`active_vehicles` 仅含 `RSUVehicleSummary` 控制摘要，没有全车真实位置、速度、航向、私有 `self_snapshot`、回放或环境引用。默认第 0 步 RSU 实际感知通过的仍为全部 16 辆车；本轮没有缩小感知范围、改变部署或新增车辆自身状态上报消息。
+
+| 权限主体 | 运动信息及用途 |
+|---|---|
+| 普通 RSU 规则 / PPO 候选 | 同一 RSU 合法快照集合；接收车运动也必须是 RSU 持有的该车对象快照 |
+| 车端实际风险执行器 | 自身当前状态及合法历史运动，加本地可见 / 实收对象；私有自身运动不自动授予 RSU |
+| 仿真世界 / 离线评测 | 完整回放用于推进、真实感知与信道、离线目录和计分 |
+| oracle / 显式全局诊断 | 可用全局、未来和真值规划；发送仍由原环境验证节点持有、可达性、名额、冲突、版本及逐跳时延 |
+
+继续保留最小理想可靠控制面：车辆 ID、公开任务、对象 ID / 版本 / 本地可见关系摘要及链路候选反馈。摘要中的 CAoI 由已接收版本推得，不携带运动载荷。真实位置仍可改变环境给出的物理合法候选和链路反馈，不能把这种允许的输入变化当成运动泄漏。**本轮收紧运动数据权限，尚未实现控制面消息的完整计费和传输协议。**
+
+规则下行价值与 PPO S0 筛选共用 `risk/rsu_knowledge.py`，用 RSU 持有的接收车和对象原始快照调用冻结的 `predict_pair`。该模型已有双方快照年龄补偿；不把旧版本改成当前状态，不用车端自身历史补速。缺状态或模型所需速度时保留 `risk=None` 与原因，不能写成安全。A 仍显式额外获得公开经过步供 ETA 使用；B 的公开任务视图 `crossing_step=null`，普通预测与车端执行的 B 分支均不访问它，也不由期限反推 ETA。
+
+窗口预测的接口已移除回放输入，只接收 RSU 合法快照和历史时间前缀；接收车和已知车辆遮挡体均按原始年龄外推。接收车或已知遮挡体运动不足时 `available=false`，保留原因，`first_unreachable_step=null` 表示未知。未观测遮挡体不从世界表补齐，因此结果只是基于已知信息的接触估计；实际执行仍由环境使用真实几何检查物理信道。
+
+离线日志分为安全 `observation` 与 `offline_world_diagnostics`。后者来自显式 `world_diagnostics()` / `RiskStepResult.world_diagnostics`，包含世界实际状态和车端私有自身运动，只进入评测及诊断；普通选择器和 PPO 编码不接收该分支。
 
 快照保留对象原始状态、观测 step、来源和速度依据。**本 step 发送，最早下一 step 可用。** 上行后再下行、接收后再中继都需要后续 step；多次 V2V 接力不会刷新原始观测时间。上行允许将 RSU 当前本地同版本存入数据面缓存，供失去本地可见性后保留；下行和中继要求接收车的有效版本严格更新。
 
@@ -167,6 +185,8 @@ J  = JΣ / N
 
 已实现无通信、年龄、事件触发、期限、接收端价值等策略，及显式中继、期限停止、合法版本上报和公开需求上报。`receiver-value` 的排序分数是规则启发式，不是环境 reward、成功概率或已知真实收益。
 
+本节 2026-10-09～15 的普通策略与学习结果保留其历史权限背景：当时公共观测仍携带真实车辆状态和车端私有自身运动，窗口预测也可读取全车当前 / 历史状态。车端 B 的因果模型并不等于当时整个 RSU 接口已隔离。不能把这些记录直接标成新 RSU 合同成绩或与新模型作同权限排名。2026-10-26 只做接口验收和有限回归，没有重做 88 项研究、训练或完整优化。
+
 2026-10-09 固定研究运行了 88 项完整回合组合并重复核验，保存 116 组全任务配对。B 主实验固定场景 seed=7、23 step、46 任务、2U+2D，显式中继时 1R，窗口预测关；以下主表不设整回合发送 cap：
 
 | 策略 | 真对象成功 / 8 | F | FP | A⁻ | M | LΣ | JΣ（越小越好） |
@@ -200,7 +220,7 @@ A 是自身行程权限增强对照，单列如下；其额外权限不能解释
 - **中继减少部分弃权**：需求上报开中继时，发送 16→32，负弃权 18→14，具体为 7 项消除、3 项新增；真对象成功仍为 6/8，没有进一步增加正任务识别成功。当前不能概括为普遍降低危险事件漏报。
 - **等费用比较**：预设 cap 为 20/30/40/47；费用匹配先完整运行两臂，取实际 M 的较小值作 cap，再重跑。按 D→R→U 截取，不填充无用发送。同 cap 不一定等实际 M；只有实际 M 相等才能标作等费用。等 M=16 的中继关/开 JΣ 为 15.66/14.41，其中含误报转弃权，不能称为正确安全判断。
 
-上报版本筛选可能放弃 RSU 同版本缓存留存机会，在其他场景可能有损。窗口预测尚无独立有效收益证据，默认保持关闭。预测的 `early_send_count` 需要与关闭预测完整回放的全部下行/中继真实投递比较，确认同等或更新版本更早送出；仅预测侧送出的版本另计 `prediction_extra_send_count`，不能混称提前发送。预测只读取当前/历史轨迹和采样间隔，不读取未来真实状态或采样时间。
+上报版本筛选可能放弃 RSU 同版本缓存留存机会，在其他场景可能有损。窗口预测尚无独立有效收益证据，默认保持关闭。预测的 `early_send_count` 需要与关闭预测完整回放的全部下行/中继真实投递比较，确认同等或更新版本更早送出；仅预测侧送出的版本另计 `prediction_extra_send_count`，不能混称提前发送。新合同下预测只读取 RSU 合法运动快照和历史采样间隔；历史实现虽不读未来，却具有更宽的全车历史运动权限。
 
 当前 B 价值策略及其上报改进仍保留两项严格失败：
 
@@ -255,7 +275,7 @@ A 是自身行程权限增强对照，单列如下；其额外权限不能解释
 - [关中继认证](DEMO/outputs/offline_oracle_B_off_20261015_01/certified_summary.json)、[完整动作](DEMO/outputs/offline_oracle_B_off_20261015_01/certified_best/actions.jsonl)、[逐步证据](DEMO/outputs/offline_oracle_B_off_20261015_01/certified_best/replay.jsonl)。
 - [开中继认证](DEMO/outputs/offline_oracle_B_on_20261015_01/certified_summary.json)、[完整动作](DEMO/outputs/offline_oracle_B_on_20261015_01/certified_best/actions.jsonl)、[逐步证据](DEMO/outputs/offline_oracle_B_on_20261015_01/certified_best/replay.jsonl)、[最优性证明及单接收回放](DEMO/outputs/offline_oracle_B_on_20261015_01/optimality_certificate/certificate.json)。
 
-原始 `summary.json`、`manifest.json`、`solver_source/` 不改写；认证源码另存 `certification_manifest.json`、`certification_source/`。所有持久化中间方案、基线和最终方案都从原环境 reset 回放全部 23 step/46 任务，核对动作、逐跳投递、缓存/估速历史、task_scores 与实际费用。当前入口已集成证书、联合邻域和中间方案回放，集成后通过小实例验证，遵守预算未再启动完整优化。既有 src/scripts/YAML/sidecar 未改，旧学习器完整冻结清单与 B 烟雾 sidecar 仍一致。
+原始 `summary.json`、`manifest.json`、`solver_source/` 不改写；认证源码另存 `certification_manifest.json`、`certification_source/`。所有持久化中间方案、基线和最终方案都从原环境 reset 回放全部 23 step/46 任务，核对动作、逐跳投递、缓存/估速历史、task_scores 与实际费用。入口已集成证书、联合邻域和中间方案回放，集成后通过小实例验证，遵守预算未再启动完整优化。2026-10-15 求解时既有 src/scripts/YAML/sidecar 未改；2026-10-26 的源码权限迁移独立登记，不改历史冻结记录。两组 `certified_best` 现已重放，物理投递、车端判断和全任务计分保持原记录，JΣ 仍为 12.10 / 11.14；这次回放不是重新求解或新的在线最优性证明。
 
 首步合法有序组合已有关/开 **11,464,138 / 750,814,968** 个，历史状态还随来源与估速分化，本次记忆命中为零。关组进一步精确求解需加强实际接触/时序容量下界、证明状态压缩或改进分支顺序，并另获预算；beam、候选截断和新鲜度支配不能用于最优证明。上述证书和动作只适用于冻结固定场景，不证明在线可实现性、学习收益或泛化。本次未运行 A、PPO/S1 或新场景。
 
@@ -274,7 +294,7 @@ S0 是策略研究范围，筛选之前的物理合法候选与筛选之后的�
 
 Actor/Critic 不接收标签、真实相关对象、反馈或完整控制运动表；B 不读 crossing 或重建自身 ETA，上行/中继不绕过权限读取私有运动 payload。反馈和对象级证据保留在离线训练目标与评测分支。
 
-候选键只用于查找和端点冲突，不学习车辆/任务 ID embedding，不直接把完整 `RiskObservation` 或日志字典送入网络。D 的模型派生值来自 RSU 合法快照，目标接收车自身运动仅用于其自身预测；U/R 不公开私有对象运动，也不能借 RSU 的其他版本冒充待中继内容。默认无 RNN，不累计历史评测反馈或失见对象运动。
+候选键只用于查找和端点冲突，不学习车辆/任务 ID embedding，不直接把完整 `RSUObservation` 或日志字典送入网络。新合同下 D 的对象及目标接收车运动都来自 RSU 合法快照；车端实际判断的自身运动另行保留。U/R 不公开私有对象运动，也不能借 RSU 的其他版本冒充待中继内容。默认无 RNN，不累计历史评测反馈或失见对象运动。
 
 编码顺序、尺度与缺失位以 `risk_learning/encoding.py` 为准，不按真值拟合归一化器。共享候选网络为两层 64 单元 Tanh，均值池化排除 padding；无候选用零池化并强制 STOP。STOP 独立门控初始概率 0.2，不随候选数增多自动稀释。组合最多选 4 条真实消息，开中继时 5 条；一个联合组合只算一个世界 step。联合路径概率保留选择顺序，重算使用同一安全快照和逐选掩码，贪心解码不代表最优集合。
 
@@ -288,6 +308,8 @@ Actor/Critic 不接收标签、真实相关对象、反馈或完整控制运动�
 已完成 B/A × 中继关/开四组，训练 seed 均为 7、每组 2 个完整回合，共 184 个训练世界 step。训练、保存、严格重载及两遍完整贪心回放均有验收记录。**四组终态贪心都选择 STOP、零发送：B 的 JΣ=21，A 的 JΣ=21.25。** 这证明实现和证据流程可运行，不证明学习收益、收敛、最优或泛化；随机训练回合曾发送消息，其分数波动也不能当作学习改善。
 
 模型为 `episode_XXXX.pt`，必须配同名 `episode_XXXX.metadata.json`。metadata 校验模式/权限、域、网络、编码、组合、评分权重、配置、源码/数据/任务内容、依赖、模型哈希与实际预算；不存在跳过校验或 legacy 入口。checkpoint 包含优化器和 Python/NumPy/Torch/独立 generator 状态，但尚无自动续训。源码漂移时拒绝加载，不得手改旧 sidecar 掩盖差异。
+
+2026-10-26 输入语义升为 `risk-safe-32-6-rsu-legal-v2`，维度仍为 32/6，S0 名称不变，没有实现 S1。metadata 另存 `rsu_information_contract`，与车端 A/B 模型权限分开。新注册表 `DEMO/data/contracts/rsu_legal_knowledge_v1.json` 保留旧 65 文件逐项指纹、此次 67 文件基础冻结集合及其中 12 项授权变更原因，另外登记学习器 / oracle 源码。`risk_learning/source_contract.py` 核对旧根 `22cfca1e…`、新根 `3b448c52…` 和注册表 SHA256；学习入口与 oracle 入口共用严格检查，配置、数据和任务冻结仍照常验证。全源码仍进入新 sidecar；不以替换旧哈希、忽略字段或改写旧 sidecar 取得兼容。四个历史终态模型均在新合同下拒绝加载，保留原模型和原始结果；本轮仅校验未训练初始化 checkpoint 的保存 / 严格重载，没有重新训练。
 
 训练与评估输出独占创建，已有目录/JSONL/checkpoint 拒绝覆盖；异常保留 partial，不优化截断回合，不自动续训。烟雾模型不接续 fixed；固定阶段从头初始化，预设 seed 为 7/17/27/37/47，B 在先、A 分表，中继关/开分别报告。
 
@@ -307,6 +329,7 @@ python DEMO/scripts/check_risk_scene.py --json
 python DEMO/scripts/check_risk_rules.py --json
 python DEMO/scripts/check_risk_relay.py --json
 python DEMO/scripts/check_risk_mechanisms.py
+python DEMO/scripts/check_rsu_permissions.py
 python DEMO/scripts/run_risk_compare.py --policies no-communication,age,event-trigger,deadline,receiver-value --json
 ```
 
@@ -433,13 +456,14 @@ python DEMO/scripts/run_experiment.py --policy ppo --model-path DEMO/outputs/ppo
 | `data/`、`geometry/`、`wireless/` | 数据读取、三维遮挡与可替换数学信道 |
 | `perception/` | 感知、快照/缓存、时序、合法历史窗口预测 |
 | `risk/conflicts.py`、`risk/model.py` | 离线任务目录、在线固定风险模型 |
+| `types.py` 中的 `RSUObservation`、`risk/rsu_knowledge.py` | 独立 RSU 在线权限、共用接收车估计；世界诊断另设类型 |
 | `risk/executor.py`、`risk/evaluator.py`、`risk/scoring.py` | 投递、离线结果核对、唯一计分与反馈 |
 | `risk/opportunities.py` | 独立任务对象的感知/合法多跳机会诊断 |
 | `env/risk_comm_env.py` | 独立风险环境与状态推进 |
 | `policies/risk_*.py` | 原风险 baseline、接收端价值、中继、公开上报及同域训练对照 |
 | `risk_learning/domain.py`、`encoding.py`、`actions.py` | S0 白名单投影、32/6 编码与合法自回归组合 |
 | `risk_learning/policy.py`、`rollout.py`、`training.py` | 网络、完整回合回报与有限 PPO |
-| `risk_learning/metadata.py`、`evidence.py` | 严格模型合同、内容冻结、对象/路径/费用证据 |
+| `risk_learning/metadata.py`、`source_contract.py`、`evidence.py` | 严格模型合同、显式源码迁移、对象/路径/费用证据 |
 | `DEMO/oracle_experiments/`，在 src 外 | 两个固定B离线入口、完整动作搜索、必要接收次数证明与独立验证 |
 | `env/task_relay_env.py`、`tasks/`、`policies/task_policy.py`、`rl/` | 旧 25 包任务线及其 SB3 PPO |
 | `env/relay_env.py`、`rl/common.py` | 更早的 CAoI/离散动作兼容实现，非默认主入口 |
@@ -458,8 +482,11 @@ python DEMO/scripts/check_risk_rules.py --json
 python DEMO/scripts/check_risk_scene.py --json
 python DEMO/scripts/check_risk_relay.py --json
 python DEMO/scripts/check_risk_mechanisms.py
-python -m compileall DEMO/src DEMO/scripts
-D:\Anaconda\Scripts\ruff.exe check DEMO/src DEMO/scripts
+python DEMO/scripts/check_rsu_permissions.py
+# 仅合成小实例与语义/证书检查，不启动固定全场搜索
+python DEMO/oracle_experiments/check_oracle.py
+python -m compileall DEMO/src DEMO/scripts DEMO/oracle_experiments
+D:\Anaconda\Scripts\ruff.exe check DEMO/src DEMO/scripts DEMO/oracle_experiments
 D:\Anaconda\python.exe -m mypy DEMO/src
 ```
 
@@ -468,6 +495,22 @@ D:\Anaconda\python.exe -m mypy DEMO/src
 当前机器曾出现 Anaconda NumPy 与用户 Torch 的 OpenMP 导入顺序冲突。新学习入口延迟加载并先 NumPy 后 Torch，不使用 `KMP_DUPLICATE_LIB_OK`。Python 启动器可能打印既有路径诊断，须结合退出码和完整日志判断。Anaconda 的 mypy 模块入口可用于此前 mypy.exe DLL 问题；不要因默认 Python 缺静态检查依赖而跳过检查。
 
 2026-10-15 离线 oracle 检查位于 `oracle_experiments/check_oracle.py`，覆盖独立穷举最优值 5.01、共享费用、空动作/截止/初始损失/末步费用、来源/同版本顺序/估速历史、中继时延/冲突、新快照使负任务变差、预算保护、原环境/查表一致性及固定场景证明条件。未恢复 `DEMO/tests`。风险规则、场景、中继检查及冻结复核另有日志；未运行会同时评估 A 的学习/机制套件。最终日志见 `DEMO/outputs/offline_oracle_validation_20261015_final/`。
+
+2026-10-26 权限验收：新增 `check_rsu_permissions.py` 的 26 项检查全部通过，包括固定允许控制输入后的私有运动扰动、PPO 编码 / 概率 / 动作一致性、隐蔽遮挡体预测隔离、失见本地历史、旧快照年龄 / 缺速 / 上报时延、B 禁读 crossing、车端自身运动、oracle 动作合法性、新旧合同及历史回放。该脚本不训练、不搜索；若本地缺少历史产物，对应历史检查会显式 skip，本次没有跳过。信息隔离用合成夹具固定可见 ID / 版本、公开任务、历史时钟及物理候选反馈，不要求改变真实位置后物理链路仍自然相同。
+
+四配置学习检查各完成 23 step，仅推理和路径概率重算；oracle 的 18 项小实例 / 语义 / 证书检查通过，没有启动完整场景搜索。风险场景 / 规则 / 中继 / 机制、旧环境 / 任务兼容检查、编译、Ruff 和 Mypy（61 个源文件）通过。另在默认 B 完整回归无通信、deadline、receiver-value、显式中继及预测开关的六组轨迹，JΣ 为 21 / 19.92 / 16.07 / 15.23 / 16.07 / 15.23；只说明这些已核对轨迹，不证明所有策略、动作或特征轨迹不变，也不说明新合同提高成绩。日志及新冻结清单见 [本轮验收目录](DEMO/outputs/rsu_permissions_20261026_111211_485870/)。
+
+同日进一步追查“权限收紧后为何汇总成绩不变”：默认 B 的 23 步无通信回放中，step 0～11 的 RSU 能合法看到当步全部活跃车辆；对 RSU 已知的活跃车辆，快照位置、航向、观测版本及位移估计速度与车端自身运动的对应数值一致。后续失见车辆已无待决任务，逐步统计“RSU 不知道其运动但仍有未来任务的活跃接收车”均为零。首次失见及该车完整目录的最后任务期限如下，不能只用“第 0 步看到了 16 辆车”解释整回合结果：
+
+| 车辆 ID | 首次失去 RSU 可见性的 step | 最后任务期限 step |
+|---|---:|---:|
+| 3460 | 12 | 11 |
+| 10697 | 14 | 12 |
+| 13138 | 19 | 9 |
+| 3514 | 20 | 9 |
+| 11370 | 22 | 17 |
+
+另将当前无通信、deadline、receiver-value、receiver-value-relay 四种 B、预测关闭策略分别与历史完整运行逐步配对：每组 23 步的动作、逐跳投递、车端风险判断、event_results 和全部 46 项 task_scores 均一致。因此已测成绩相同来自这些轨迹的实际决策未变，而非不同任务损失或费用恰好抵消。该场景在有任务的接收车运动上未形成新的 RSU 信息瓶颈；不能据此否定权限隔离，也不推广为 A、预测开启、所有策略或其他场景的行为均相同。不要为制造差异而擅自缩小感知范围、改部署或改任务。原始统计与历史配对指纹见 [效果原因核对](DEMO/outputs/rsu_information_effect_20261026_172529_616352/effect_audit.json)；只做既有场景回放，没有训练或完整求解。
 
 ## 12. 当前边界与后续工作
 
@@ -493,7 +536,8 @@ S1 `all-legal-snapshot-domain-v1` 尚未实现，只有后续明确允许扩集�
 | 固定 B/A 规则、预算与对象路径配对 | [最终汇总](DEMO/outputs/risk_fixed_b_comm_20261009_171625_3029627/study_final/summary.json)、[配对索引](DEMO/outputs/risk_fixed_b_comm_20261009_171625_3029627/study_final/pair_index.json) |
 | 专用学习器验收、模型与全部烟雾结果 | [执行报告](DEMO/outputs/risk_learning_20261010_112722_812903/report.md)、[交付索引](DEMO/outputs/risk_learning_20261010_112722_812903/artifact_index.json)、[消息证据索引](DEMO/outputs/risk_learning_20261010_112722_812903/delivery_index.json) |
 | 固定 B 离线 oracle | [关中继认证](DEMO/outputs/offline_oracle_B_off_20261015_01/certified_summary.json)、[开中继认证](DEMO/outputs/offline_oracle_B_on_20261015_01/certified_summary.json)；各目录保留原始搜索和认证来源 |
+| RSU 运动权限隔离，2026-10-26 | [定向检查日志](DEMO/outputs/rsu_permissions_20261026_111211_485870/permissions_final.log)、[四配置纯推理检查](DEMO/outputs/rsu_permissions_20261026_111211_485870/learning_inference_check/check.json)、[源码合同注册表](DEMO/data/contracts/rsu_legal_knowledge_v1.json) |
 
-源码/数据的集合指纹是相对路径到 SHA256 字典的排序紧凑 JSON 哈希，不是 Git commit ID；严格冻结与模型合同以 `risk_learning/metadata.py` 和 sidecar 为准。本次文档整理不修改实验源码、数据、模型或既有输出，也不改旧模型 sidecar。
+源码/数据的集合指纹是相对路径到 SHA256 字典的排序紧凑 JSON 哈希，不是 Git commit ID；严格冻结与模型合同以 `risk_learning/metadata.py`、源码合同注册表和 sidecar 为准。本轮修改风险在线接口及其必要消费者，保留修改前源码副本；场景 / YAML / 车端模型 / 评分、采集 Mod、旧任务实现、旧模型 sidecar 和历史输出均未修改。没有训练、完整 oracle 求解、S1、新场景、Git 提交 / 推送或子智能体操作。
 
 README 负责当前设计、参数用法与结论，AGENTS 负责接手约束和稳定决策，YAML 负责可调参数，outputs 保存原始证据。未来只补充当前有效信息，无需恢复独立的早期计划和提示词目录；已有输出不因文档合并而覆盖或清理。删除其他文件仍须用户同意。

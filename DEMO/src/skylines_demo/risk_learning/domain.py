@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from math import isfinite
 
 from ..config import RiskCommConfig
-from ..risk.model import PairPrediction, own_schedule_eta, predict_pair
+from ..risk.model import PairPrediction
+from ..risk.rsu_knowledge import predict_receiver_pair, public_task_eta
 from ..types import DownlinkAction, RelayAction, RiskObservation, UplinkAction, Vector3
 
 DOMAIN_ID = "receiver-risk-domain-v1"
@@ -55,7 +56,7 @@ def build_safe_step(obs: RiskObservation, config: RiskCommConfig,
     tasks = tuple(SafeTask(task.vehicle_id, task.conflict_point, task.decision_step)
                   for task in obs.tasks)
     # A权限在独立分支读取；B连crossing属性都不访问，更不由deadline反推。
-    schedules = (tuple(own_schedule_eta(config, task.crossing_step, t, obs.delta_seconds)
+    schedules = (tuple(public_task_eta(config, task, t, obs.delta_seconds)
                        for task in obs.tasks) if config.ego_eta_mode == "public-crossing-step"
                  else (None,) * len(tasks))
     versions = {(receiver, obj): version for receiver, obj, version
@@ -93,11 +94,8 @@ def build_safe_step(obs: RiskObservation, config: RiskCommConfig,
             if kind == "D":
                 if not future or source < 0 or source <= target:
                     continue
-                ego = next((v.self_snapshot for v in obs.active_vehicles
-                            if v.vehicle_id == receiver), None)
-                predictions = [predict_pair(ego, rsu[obj], task.conflict_point,
-                                           obs.elapsed_seconds, obs.step_times[:t + 1], config,
-                                           scheduled_ego_arrival_seconds=schedule)
+                predictions = [predict_receiver_pair(obs, receiver, obj, task.conflict_point,
+                                                    config, scheduled_ego_arrival_seconds=schedule)
                                for task, schedule in future]
                 # 与现有eligible条件一致；只复用正式模型，不读旧task_id排序。
                 if not any(p.risk and p.distance_m is not None

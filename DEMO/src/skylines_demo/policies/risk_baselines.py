@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from ..config import RiskCommConfig
+from ..perception.link_forecast import project_snapshot_position
 from ..risk.sufficiency import predicted_object_distance_to_task
 from ..types import (
     DownlinkAction,
@@ -172,8 +173,10 @@ def select_deadline_action(
     """Prioritize receivers whose observed task decisions are most urgent."""
 
     vehicle_positions = {
-        state.vehicle_id: state.snapshot.position
-        for state in observation.active_vehicles
+        snapshot.object_id: project_snapshot_position(
+            snapshot, observation.elapsed_seconds, observation.step_times[:observation.step_index + 1],
+        )
+        for snapshot in observation.rsu_snapshots
     }
     tasks_by_vehicle: dict[int, list[RiskTaskView]] = {}
     for task in observation.tasks:
@@ -184,9 +187,9 @@ def select_deadline_action(
         if not tasks:
             return (float("inf"), float("inf"), candidate.receiver_id, candidate.object_id)
         task = min(tasks, key=lambda item: (item.decision_step, item.task_id))
-        distance = vehicle_positions[candidate.receiver_id].horizontal_distance_to(
-            task.conflict_point
-        )
+        position = vehicle_positions.get(candidate.receiver_id)
+        distance = (position.horizontal_distance_to(task.conflict_point)
+                    if position is not None else float("inf"))
         return (
             float(task.decision_step),
             distance,

@@ -6,7 +6,7 @@ from typing import Any
 
 from .domain import CandidateKey, SafeStep
 
-ENCODING_VERSION = "risk-safe-32-6-v1"
+ENCODING_VERSION = "risk-safe-32-6-rsu-legal-v2"
 FEATURE_NAMES = (
     "U", "D", "R", "source_age", "source_known", "rsu_age", "rsu_known",
     "target_age", "target_known", "source_minus_rsu", "source_minus_target",

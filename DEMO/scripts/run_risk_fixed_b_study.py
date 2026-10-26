@@ -22,6 +22,7 @@ from skylines_demo.policies.risk_public_uplink import (
 )
 from skylines_demo.policies.risk_relay_policy import select_receiver_value_with_relay_action
 from skylines_demo.risk.model import model_version, own_information_permission
+from skylines_demo.risk.rsu_knowledge import rsu_information_contract
 from skylines_demo.types import RiskSchedulingAction
 import run_risk_compare as compare
 from trace_risk_episode import _step_payload
@@ -119,6 +120,7 @@ def capture_run(runtime, config, name, cap=None):
     return dict(policy=name, global_send_cap=cap, cap_order="downlink_relay_uplink",
                 risk_config=asdict(config), risk_model_version=model_version(config),
                 own_information_permission=own_information_permission(config),
+                rsu_information_contract=rsu_information_contract(),
                 catalog_fingerprint=TASK_FINGERPRINT, episode_terminated=True,
                 episode_truncated=False, invalid_action_count=0, objective=objective,
                 legacy=legacy, steps=steps, event_results=events, task_scores=scores)

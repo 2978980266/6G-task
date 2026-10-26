@@ -24,6 +24,8 @@ from ..types import (
     RiskTaskView,
     LinkForecast,
     RiskVehicleState,
+    RSUVehicleSummary,
+    RiskWorldDiagnostics,
     UplinkAction,
     VehicleSnapshot,
 )
@@ -57,6 +59,7 @@ class RiskStepResult:
     feedback: RiskStepFeedback
     objective: dict[str, object]
     delivery_records: tuple[RiskDeliveryRecord, ...] = ()
+    world_diagnostics: RiskWorldDiagnostics | None = None
 
     @property
     def reward(self) -> float:
@@ -114,6 +117,28 @@ class RiskCommEnv:
     def current_observation(self) -> RiskObservation | None:
         return self._current_observation
 
+    def world_diagnostics(self) -> RiskWorldDiagnostics | None:
+        """Offline/oracle-only snapshot; never passed to an ordinary selector."""
+        if self._current_observation is None:
+            return None
+        frame = self._replay.frames[self._step_index]
+        return RiskWorldDiagnostics(
+            step_index=frame.step_index,
+            elapsed_seconds=frame.elapsed_seconds,
+            active_vehicles=tuple(
+                RiskVehicleState(
+                    vehicle_id=vehicle_id,
+                    snapshot=frame.vehicles[vehicle_id],
+                    visible_object_ids=self._sensor.visible_object_ids(vehicle_id, frame),
+                    known_object_ids=self._vehicle_knowledge[vehicle_id].known_object_ids,
+                    data_plane_object_ids=self._vehicle_knowledge[vehicle_id].data_plane_object_ids,
+                    caoi_steps=self._vehicle_knowledge[vehicle_id].caoi_seconds(self._step_index),
+                    self_snapshot=self._self_snapshots[vehicle_id],
+                )
+                for vehicle_id in sorted(frame.vehicles)
+            ),
+        )
+
     @property
     def objective_summary(self) -> dict[str, object]:
         """Evaluation-only totals, deliberately outside RiskObservation/caches."""
@@ -159,6 +184,7 @@ class RiskCommEnv:
             raise RuntimeError("Call reset() before step().")
 
         observation = self._current_observation
+        world_diagnostics = self.world_diagnostics()
         risk_decisions = self._current_decisions
         event_results = tuple(
             evaluate_decision(
@@ -220,6 +246,7 @@ class RiskCommEnv:
             feedback=feedback,
             objective=self.objective_summary,
             delivery_records=delivery_records,
+            world_diagnostics=world_diagnostics,
         )
 
     def _prepare_observation(self, step_index: int) -> RiskObservation:
@@ -305,7 +332,7 @@ class RiskCommEnv:
                         self._risk_config, task.crossing_step, step_index,
                         estimate_step_seconds(self._step_times[:step_index + 1],
                                               self._runtime.config.environment.fallback_step_seconds),
-                    ),
+                    ) if self._risk_config.ego_eta_mode == "public-crossing-step" else None,
                 ),
             )
             for task in decision_tasks
@@ -344,7 +371,12 @@ class RiskCommEnv:
                         snapshot=self._rsu_knowledge.snapshot_for(candidate.object_id),
                         receiver_id=candidate.receiver_id,
                         current_step=step_index,
-                        replay_history=self._replay,
+                        rsu_snapshots=tuple(
+                            self._rsu_knowledge.snapshot_for(object_id)
+                            for object_id in self._rsu_knowledge.known_object_ids
+                        ),
+                        step_times=self._step_times[:step_index + 1],
+                        current_time_seconds=frame.elapsed_seconds,
                         rsu_position=self._runtime.config.rsu.position,
                         communication_model=self._communication,
                         fallback_step_seconds=self._runtime.config.environment.fallback_step_seconds,
@@ -359,20 +391,19 @@ class RiskCommEnv:
                 vehicle_id=task.vehicle_id,
                 conflict_point_id=task.conflict_point_id,
                 conflict_point=task.conflict_point,
-                crossing_step=task.crossing_step,
+                crossing_step=(task.crossing_step
+                               if self._risk_config.ego_eta_mode == "public-crossing-step" else None),
                 decision_step=task.decision_step,
             )
             for task in pending_tasks
         )
         vehicle_states = tuple(
-            RiskVehicleState(
+            RSUVehicleSummary(
                 vehicle_id=vehicle_id,
-                snapshot=frame.vehicles[vehicle_id],
                 visible_object_ids=self._sensor.visible_object_ids(vehicle_id, frame),
                 known_object_ids=self._vehicle_knowledge[vehicle_id].known_object_ids,
                 data_plane_object_ids=self._vehicle_knowledge[vehicle_id].data_plane_object_ids,
                 caoi_steps=self._vehicle_knowledge[vehicle_id].caoi_seconds(step_index),
-                self_snapshot=self._self_snapshots[vehicle_id],
             )
             for vehicle_id in active_vehicle_ids
         )

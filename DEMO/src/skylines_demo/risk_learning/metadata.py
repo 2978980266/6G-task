@@ -14,12 +14,14 @@ from ..bootstrap import load_runtime
 from ..config import load_risk_config
 from ..env.risk_comm_env import RiskCommEnv
 from ..risk.model import model_version, own_information_permission
+from ..risk.rsu_knowledge import rsu_information_contract
 from ..risk.scoring import OBJECTIVE_VERSION, OBJECTIVE_WEIGHTS
 from .actions import COMBINATION_VERSION
 from .encoding import ENCODING_VERSION, FEATURE_NAMES, GLOBAL_NAMES, SCALES
 from .evidence import fingerprint
 from .policy import NETWORK_SPEC, POLICY_VERSION, RiskCandidatePolicy
 from .training import TrainingSpec
+from .source_contract import validate_frozen_sources
 
 TASK_FINGERPRINT = "1b091a60bb9e16cfed79526455cd71b5cf0c01a1b19cde5dc4c72e7aec05eabf"
 
@@ -51,13 +53,14 @@ def freeze_manifest(config_path: Path, risk_path: Path) -> dict[str, Any]:
     additions.add("DEMO/src/skylines_demo/policies/risk_training_controls.py")
     frozen_sources = {p: h for p, h in sources.items()
                       if "/risk_learning/" not in p and p not in additions}
-    if (fingerprint(frozen_sources) != "22cfca1e19e86fff1a1fcf243fd933c55e859f3db47de3b544178d9e5062c94c"
-            or fingerprint(data) != "ca0f35c80f944dc77bbac09e86737383468575f82fc52e44247948eb8b047af1"):
-        raise ValueError("既有冻结源码或默认CSV内容漂移，停止学习。")
+    source_contract = validate_frozen_sources(frozen_sources)
+    if fingerprint(data) != "ca0f35c80f944dc77bbac09e86737383468575f82fc52e44247948eb8b047af1":
+        raise ValueError("默认CSV内容漂移，停止学习。")
     return dict(task_fingerprint=TASK_FINGERPRINT, source_hashes=sources,
                 source_fingerprint=fingerprint(sources), data_hashes=data, data_fingerprint=fingerprint(data),
                 config_sha256=file_hash(config_path), risk_sha256=file_hash(risk_path),
                 frozen_source_hashes=frozen_sources,
+                source_contract=source_contract, rsu_information_contract=rsu_information_contract(),
                 scene_seed=runtime.config.seed, scenario_config=asdict(runtime.config), risk_config=asdict(cfg))
 
 
@@ -75,6 +78,7 @@ def contract(spec: TrainingSpec, manifest: dict[str, Any]) -> dict[str, Any]:
                 domain=spec.domain, combination=COMBINATION_VERSION,
                 stop={"gate": "independent_sigmoid_then_conditional_softmax", "initial": .2, "forced_probability": 1.},
                 mode=spec.mode, permission=own_information_permission(cfg), model_version=model_version(cfg),
+                rsu_information_contract=rsu_information_contract(),
                 predict=False, relay=spec.relay, slots=[2, 2, int(spec.relay)],
                 objective_version=OBJECTIVE_VERSION, weights=asdict(OBJECTIVE_WEIGHTS), gamma=1., beta=0.,
                 episode_steps=23, optimizer=spec.optimizer_spec(), dependencies=dependencies(),
@@ -136,6 +140,8 @@ def load_risk_policy(model_path: Path, expected_spec: TrainingSpec,
                      expected_manifest: dict[str, Any]) -> RiskCandidatePolicy:
     try:
         meta = json.loads(model_path.with_suffix(".metadata.json").read_text(encoding="utf-8"))
+        if meta.get("rsu_information_contract") != rsu_information_contract():
+            raise ValueError("RSU运动权限合同不兼容；旧模型须在其历史源码下解读，不在新合同加载。")
         episodes, updates = meta["completed_episodes"], meta["updates"]
         _validate_counts(expected_spec, episodes, updates)
         expected = dict(contract(expected_spec, expected_manifest), completed_episodes=episodes, updates=updates,

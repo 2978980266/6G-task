@@ -139,11 +139,14 @@ def ideal_current_information(runtime, config, max_steps=None):
             for object_id, snapshot in snapshots.items():
                 if object_id != task.vehicle_id:
                     cache.observe_local(snapshot)
-            own = next(v.self_snapshot for v in observation.active_vehicles if v.vehicle_id == task.vehicle_id)
+            world = env.world_diagnostics()
+            assert world is not None
+            own = next(v.self_snapshot for v in world.active_vehicles if v.vehicle_id == task.vehicle_id)
             decision = execute_risk(
                 task, cache, observation.step_index, frame.elapsed_seconds, observation.step_times, config,
                 ego_snapshot=own, scheduled_ego_arrival_seconds=own_schedule_eta(
-                    config, task.crossing_step, observation.step_index, observation.delta_seconds),
+                    config, task.crossing_step, observation.step_index, observation.delta_seconds)
+                if config.ego_eta_mode == "public-crossing-step" else None,
             )
             events.append(asdict(evaluate_decision(task, decision)))
         observation = env.step(RiskSchedulingAction()).next_observation

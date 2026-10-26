@@ -56,6 +56,7 @@ class LinkForecast:
     reachable_steps: tuple[int, ...]
     first_unreachable_step: int | None
     available: bool
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -112,31 +113,52 @@ class RiskTaskView:
     vehicle_id: int
     conflict_point_id: int
     conflict_point: Vector3
-    crossing_step: int
+    # Only A receives the offline passage permission; B publishes no value.
+    crossing_step: int | None
     decision_step: int
 
 
 @dataclass(frozen=True)
 class RiskVehicleState:
+    """Offline world diagnostics. Never include this type in an RSU observation."""
     vehicle_id: int
     snapshot: VehicleSnapshot
     visible_object_ids: tuple[int, ...]
     known_object_ids: tuple[int, ...]
     data_plane_object_ids: tuple[int, ...]
     caoi_steps: float | None
-    # Own causal motion is control information, never a forwardable object.
+    # Private to the vehicle's risk executor, never RSU control information.
     self_snapshot: RiskSnapshot | None = None
 
 
+RSU_INFORMATION_VERSION = "rsu-legal-knowledge-v1"
+
+
 @dataclass(frozen=True)
-class RiskObservation:
+class RSUVehicleSummary:
+    """Ideal reliable control summaries; no position, heading or velocity payload."""
+
+    vehicle_id: int
+    visible_object_ids: tuple[int, ...]
+    known_object_ids: tuple[int, ...]
+    data_plane_object_ids: tuple[int, ...]
+    caoi_steps: float | None
+
+
+@dataclass(frozen=True)
+class RSUObservation:
+    """Ordinary scheduler input: legal RSU snapshots plus explicit control inputs.
+
+    No world state, private vehicle self motion, cache or replay references.
+    Physical candidate feedback may depend on the world; it carries only IDs.
+    """
     step_index: int
     simulation_frame: int
     game_time: str
     record_time_utc: str
     elapsed_seconds: float
     delta_seconds: float
-    active_vehicles: tuple[RiskVehicleState, ...]
+    active_vehicles: tuple[RSUVehicleSummary, ...]
     tasks: tuple[RiskTaskView, ...]
     uplink_candidates: tuple[UplinkAction, ...]
     downlink_candidates: tuple[DownlinkAction, ...]
@@ -152,6 +174,25 @@ class RiskObservation:
     rsu_position: Vector3 = Vector3(0.0, 0.0, 0.0)
     link_forecasts: tuple[tuple[int, int, LinkForecast], ...] = ()
     rsu_visible_object_ids: tuple[int, ...] = ()
+    information_contract: str = RSU_INFORMATION_VERSION
+
+    def snapshot_for(self, object_id: int) -> RiskSnapshot | None:
+        """Return exactly the RSU-held version, including its original age/source."""
+        return next((s for s in self.rsu_snapshots if s.object_id == object_id), None)
+
+
+# Historical rule helpers keep the name, but can only receive the safe interface.
+# This alias does not provide old model/metadata compatibility.
+RiskObservation = RSUObservation
+
+
+@dataclass(frozen=True)
+class RiskWorldDiagnostics:
+    """Explicit offline/oracle permission, separate from the ordinary observation."""
+
+    step_index: int
+    elapsed_seconds: float
+    active_vehicles: tuple[RiskVehicleState, ...]
 
 
 @dataclass(frozen=True)
