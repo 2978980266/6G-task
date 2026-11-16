@@ -1,7 +1,7 @@
 scenario_name: cities_skylines_dualmind_demo_train # 场景名称，用于标识当前实验配置
 seed: 7 # 全局默认随机种子；命令行 --seed 仅用于临时覆盖
-trajectory_csv: D:\vscode\6G\Cities_Skylines_data\VehicleTrackLogs\20260623_151408 # 车辆轨迹数据目录或文件路径
-building_csv: D:\vscode\6G\Cities_Skylines_data\BuildingTrackLogs\20260623_151408 # 建筑快照数据目录或文件路径
+trajectory_csv: Cities_Skylines_data/VehicleTrackLogs/20260623_151408
+building_csv: Cities_Skylines_data/BuildingTrackLogs/20260623_151408
 
 rsu:
   x: 1350.894 # RSU 的世界坐标 x

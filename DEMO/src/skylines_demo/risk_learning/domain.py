@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isfinite
+from typing import Tuple, Union
 
 from ..config import RiskCommConfig
 from ..risk.model import PairPrediction
@@ -10,8 +11,8 @@ from ..risk.rsu_knowledge import predict_receiver_pair, public_task_eta
 from ..types import DownlinkAction, RelayAction, RiskObservation, UplinkAction, Vector3
 
 DOMAIN_ID = "receiver-risk-domain-v1"
-CandidateKey = tuple[str, int, int, int]
-MessageAction = UplinkAction | DownlinkAction | RelayAction
+CandidateKey = Tuple[str, int, int, int]
+MessageAction = Union[UplinkAction, DownlinkAction, RelayAction]
 
 
 @dataclass(frozen=True)

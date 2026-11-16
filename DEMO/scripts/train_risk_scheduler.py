@@ -5,10 +5,16 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from skylines_demo.risk_learning.training import TrainingSpec, run_training
 
 
 def main() -> int:
+    dispatch = argparse.ArgumentParser(add_help=False)
+    dispatch.add_argument("--algorithm", choices=("dreamer", "ppo"), default="dreamer")
+    selected, arguments = dispatch.parse_known_args()
+    if selected.algorithm == "dreamer":
+        from train_risk_dreamer import main as dreamer_main
+        return dreamer_main(arguments)
+    from skylines_demo.risk_learning.training import TrainingSpec, run_training
     parser = argparse.ArgumentParser(description="独立风险S0训练；fixed预算仅在用户授权后调用。")
     parser.add_argument("--mode", choices=("B", "A"), required=True)
     parser.add_argument("--relay", choices=("off", "on"), required=True)
@@ -19,7 +25,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=ROOT / "data/config/train.yaml")
     parser.add_argument("--risk-config", type=Path, default=ROOT / "data/config/risk.yaml")
-    args = parser.parse_args()
+    args = parser.parse_args(arguments)
     try:
         spec = TrainingSpec(args.mode, args.relay == "on", args.train_seed, args.episodes, args.phase, args.domain)
         if args.output_dir.exists():

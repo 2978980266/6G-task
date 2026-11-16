@@ -6,9 +6,8 @@ The existing snapshot/cache rules remain the execution authority.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Callable, Literal
 
 from ..config import RiskCommConfig
 from ..risk.sufficiency import receiver_version

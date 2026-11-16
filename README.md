@@ -1,5 +1,51 @@
 # 6G：面向车辆风险判断的感知信息通信调度实验平台
 
+## RSU Dreamer 通信调度器（两两关系网络）
+
+默认训练/评估算法改为 DreamerV3 风格的 RSSM + Actor-Critic，参考
+[DreamerV3](https://github.com/danijar/dreamerv3) 与
+[PyTorch 社区实现](https://github.com/NM512/dreamerv3-torch)。这是面向本环境的适配，
+并非论文基准的完整复现。下文旧 PPO 与历史冻结实验按各自版本解读；
+历史 PPO 入口需显式添加 `--algorithm ppo`。
+
+世界模型只部署在 RSU，用历史观测和通信动作预测后续观测、合法性、奖励与回合延续，
+通过想象轨迹训练通信调度策略。车辆仍依据本地感知和实际收到的原始快照判断风险。
+
+| 模块 | 结构 |
+|---|---|
+| 输入 | `nodes[N,16]`、`candidates[N,N,67]`、`legal[N,N,3]`、`global[6]` |
+| 关系编码 | U/D 各32维特征加知识年龄/已知/可见3维；共享节点/关系 MLP，双向均值聚合 |
+| RSSM | 每节点共享 GRU，默认确定状态128维、随机状态16组×16类别；节点隐状态384维 |
+| Actor | 独立停止门，逐项选择 U/D/R、端点、对象和中继接收方；共享指针与条件合法掩码 |
+| Critic | 汇总节点隐状态，预测255桶 symlog 价值分布，使用慢目标网络 |
+| 训练 | 重建、奖励、continuation、平衡KL；想象中 REINFORCE 与 λ-return，三个独立优化器 |
+
+保留全部原 S0 消息、2U+2D(+1R)、端点排他、逐跳一拍时延和原始计分。
+不存储全量中继三元组词表，不使用车辆 ID one-hot。节点输入/隐状态为 O(N)，
+关系表示为 O(N²)，参数形状独立于车辆数；环境候选生成与中继条件检查仍可能有 O(N³) 计算。
+训练仍要求固定初始参与者集合和完整23步回合，暂不支持不同车辆集合混合回放。
+
+从仓库根目录执行（Python 3.10+）：
+
+```powershell
+python -m pip install -e "./DEMO[dreamer]"
+python -B DEMO/scripts/train_risk_scheduler.py --mode B --relay on --train-seed 7 --episodes 200 --size default --threads 8 --output-dir DEMO/outputs/dreamer_run
+python -B DEMO/scripts/evaluate_risk_scheduler.py --model-path DEMO/outputs/dreamer_run/model.pt --output-dir DEMO/outputs/dreamer_eval
+```
+
+`--updates-per-episode` 控制每回合更新次数，`--prefill-episodes` 控制预收集回合数。
+输出目录必须不存在；保存模型、语义配置、损失、逐步动作和评分，不自动续训。
+评估验证架构/配置/参与者和张量，并执行两次确定性贪心回放；
+本分支不附带实验测试脚本、实验产物或 SHA256 清单，也不以源码/数据哈希锁定模型。
+这不能检测训练数据内容在原路径上的改变；比较实验时须自行保持相同数据。
+便携 checkpoint 使用独立格式，历史含哈希合同的实验模型仍使用原实验代码读取。
+
+2026-11-12 单场景、单训练seed、开启中继的200回合实验：新版贪心 J 从21.67降至17.69，
+旧版训练后为21.00；新版随机执行20次均值从19.131变为19.156，旧版训练后18.934，
+最佳规则14.82。尚无整体学习收益或跨场景泛化结论。
+
+---
+
 本文于 **2026-10-26** 更新，实验与验收结果按各节记录的执行日期及权限合同解读。当前设计、使用说明和有效实验结论统一保留在本 README；接手约束保留在根目录 `AGENTS.md`，不再单独维护两套文档目录。主工程位于 `DEMO/`，所有命令均从 `D:\vscode\6G` 执行。参数以 YAML 为准，原始实验依据保留在 `outputs/`。
 
 项目使用《Cities: Skylines 1》导出的车辆轨迹和建筑快照，研究：**车辆感知受限、通信资源有限时，怎样选择信息内容、接收车辆、发送时机和传递路径，使通信更有效地服务交叉风险判断。** 调度器选择上报、下发、中继哪些对象快照以及何时停止发送；车辆使用实际掌握的信息和固定运动模型判断，环境再用真实轨迹评测。

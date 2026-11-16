@@ -6,15 +6,21 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from skylines_demo.bootstrap import load_runtime
-from skylines_demo.config import load_risk_config
-from skylines_demo.env.risk_comm_env import RiskCommEnv
-from skylines_demo.risk_learning.evidence import ExclusiveWriter, fingerprint
-from skylines_demo.risk_learning.metadata import file_hash, freeze_manifest, load_risk_policy, read_spec
-from skylines_demo.risk_learning.training import collect_episode, initialize_seed
 
 
 def main() -> int:
+    dispatch = argparse.ArgumentParser(add_help=False)
+    dispatch.add_argument("--algorithm", choices=("dreamer", "ppo"), default="dreamer")
+    selected, arguments = dispatch.parse_known_args()
+    if selected.algorithm == "dreamer":
+        from evaluate_risk_dreamer import main as dreamer_main
+        return dreamer_main(arguments)
+    from skylines_demo.bootstrap import load_runtime
+    from skylines_demo.config import load_risk_config
+    from skylines_demo.env.risk_comm_env import RiskCommEnv
+    from skylines_demo.risk_learning.evidence import ExclusiveWriter, fingerprint
+    from skylines_demo.risk_learning.metadata import file_hash, freeze_manifest, load_risk_policy, read_spec
+    from skylines_demo.risk_learning.training import collect_episode, initialize_seed
     p = argparse.ArgumentParser(description="完整同场景评测，不证明泛化；greedy重复两次。")
     p.add_argument("--model-path", type=Path, required=True)
     p.add_argument("--metadata-path", type=Path)
@@ -26,7 +32,7 @@ def main() -> int:
     p.add_argument("--mode", choices=("B", "A"))
     p.add_argument("--disable-relay-diagnostic", action="store_true")
     p.add_argument("--global-cap", type=int, choices=(0, 20, 30, 40, 47))
-    args = p.parse_args()
+    args = p.parse_args(arguments)
     try:
         if args.output_dir.exists():
             raise FileExistsError("输出目录已存在。")
