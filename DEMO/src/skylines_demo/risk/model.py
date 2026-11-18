@@ -13,6 +13,8 @@ CAUSAL_MODEL_VERSION = "crossing-area-heading-eta-v3-causal-self-motion-v1"
 
 
 def model_version(config: RiskCommConfig) -> str:
+    if config.risk_mode == "pair-events":
+        return "direct-pair-crossing-causal-v1"
     return CAUSAL_MODEL_VERSION if config.ego_eta_mode == "causal-self-motion" else MODEL_VERSION
 
 
@@ -121,6 +123,9 @@ def predict_pair(
     Stationary occupancy persists over that window; future acceleration/turning
     and unobserved objects are not certified safe by this approximation.
     """
+    if config.risk_mode == "pair-events":
+        from .pair_prediction import predict_crossing
+        return predict_crossing(ego, obj, now, times, config)
     if config.ego_eta_mode == "causal-self-motion":
         # Enforce the permission even if a caller accidentally passes a schedule.
         scheduled_ego_arrival_seconds = None

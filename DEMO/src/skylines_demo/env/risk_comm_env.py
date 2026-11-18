@@ -74,6 +74,7 @@ class RiskCommEnv:
         self,
         runtime: ScenarioRuntime,
         risk_config: RiskCommConfig,
+        *, label_replay=None, pair_events=None,
     ) -> None:
         self._runtime = runtime
         self._risk_config = risk_config
@@ -85,10 +86,13 @@ class RiskCommEnv:
             los_evaluator=runtime.los_model,
             config=risk_config,
         )
-        self._catalog: ConflictCatalog = build_conflict_catalog(
-            self._replay,
-            risk_config,
-        )
+        if risk_config.risk_mode == "pair-events":
+            from ..risk.queries import build_query_catalog
+            self._catalog = build_query_catalog(self._replay,
+                self._replay if label_replay is None else label_replay, risk_config, pair_events)
+        else:
+            self._catalog = build_conflict_catalog(self._replay, risk_config)
+        self._scored_tasks = tuple(task for task in self._catalog.tasks if task.evaluable)
         self._tasks_by_step: dict[int, tuple[RiskTask, ...]] = {}
         for task in self._catalog.tasks:
             self._tasks_by_step.setdefault(task.decision_step, tuple())
@@ -106,8 +110,9 @@ class RiskCommEnv:
         self._last_sent_snapshots: dict[tuple[int, int], RiskSnapshot] = {}
         self._current_observation: RiskObservation | None = None
         self._current_decisions: tuple[tuple[str, RiskDecision], ...] = ()
-        self._score_ledger = RiskScoreLedger(self._catalog.tasks, len(self._replay))
+        self._score_ledger = RiskScoreLedger(self._scored_tasks, len(self._replay))
         self._send_history: list[RiskDeliveryRecord] = []
+        self._link_cache: dict[tuple[int, int], bool] = {}
 
     @property
     def catalog(self) -> ConflictCatalog:
@@ -143,6 +148,9 @@ class RiskCommEnv:
     def objective_summary(self) -> dict[str, object]:
         """Evaluation-only totals, deliberately outside RiskObservation/caches."""
         summary = self._score_ledger.summary()
+        if self._risk_config.risk_mode == "pair-events":
+            summary.update(risk_mode="pair-events", query_count=len(self._catalog.tasks),
+                           unscored_query_count=len(self._catalog.tasks) - len(self._scored_tasks))
         steps_run = cast(int, summary["steps_run"])
         last_deadline = max((task.decision_step for task in self._catalog.tasks), default=-1)
         summary["after_all_task_deadlines_send_count"] = sum(
@@ -175,7 +183,8 @@ class RiskCommEnv:
         self._last_sent_snapshots = {}
         self._current_observation = None
         self._current_decisions = ()
-        self._score_ledger = RiskScoreLedger(self._catalog.tasks, len(self._replay))
+        self._scored_tasks = tuple(task for task in self._catalog.tasks if task.evaluable)
+        self._score_ledger = RiskScoreLedger(self._scored_tasks, len(self._replay))
         self._send_history = []
         return self._prepare_observation(self._step_index)
 
@@ -192,6 +201,7 @@ class RiskCommEnv:
                 decision=decision,
             )
             for task_id, decision in risk_decisions
+            if self._task_for_id(task_id).evaluable
         )
         invalid_action = not self._is_valid_action(action, observation)
         delivered_uplinks: tuple[RiskSnapshot, ...] = ()
@@ -250,6 +260,7 @@ class RiskCommEnv:
         )
 
     def _prepare_observation(self, step_index: int) -> RiskObservation:
+        self._link_cache.clear()
         frame = self._replay.frames[step_index]
         active_vehicle_ids = tuple(sorted(frame.vehicles))
         for vehicle_id in active_vehicle_ids:
@@ -397,6 +408,9 @@ class RiskCommEnv:
             )
             for task in pending_tasks
         )
+        if self._risk_config.risk_mode == "pair-events":
+            from ..risk.queries import public_queries
+            task_views = public_queries(active_vehicle_ids, step_index, len(self._replay), self._risk_config)
         vehicle_states = tuple(
             RSUVehicleSummary(
                 vehicle_id=vehicle_id,
@@ -512,9 +526,12 @@ class RiskCommEnv:
 
     def _link_reachable(self, sender_id: int, receiver_id: int) -> bool:
         frame = self._replay.frames[self._step_index]
-        return self._communication.reachable_nodes(
-            frame, self._runtime.config.rsu.position, sender_id, receiver_id,
-        )
+        key = (sender_id, receiver_id)
+        if key not in self._link_cache:
+            self._link_cache[key] = self._communication.reachable_nodes(
+                frame, self._runtime.config.rsu.position, sender_id, receiver_id,
+            )
+        return self._link_cache[key]
 
     def _deliver(
         self,

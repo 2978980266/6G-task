@@ -274,6 +274,11 @@ class RiskCommConfig:
     event_trigger_displacement_m: float = 5.0
     conflict_cluster_radius_m: float = 8.0
     ego_eta_mode: str = "public-crossing-step"
+    risk_mode: str = "point"
+    query_interval_steps: int = 4
+    query_warmup_steps: int = 4
+    event_horizon_seconds: float = 1.5
+    event_max_height_difference_m: float = 3.0
 
     def __post_init__(self) -> None:
         self.validate()
@@ -303,6 +308,17 @@ class RiskCommConfig:
         return config
 
     def validate(self) -> None:
+        import math
+        if self.risk_mode not in {"point", "pair-events"}:
+            raise ValueError("risk_mode must be point or pair-events.")
+        if self.risk_mode == "pair-events" and self.ego_eta_mode != "causal-self-motion":
+            raise ValueError("Pair events require causal-self-motion; offline own schedules are unavailable.")
+        for name, minimum in (("query_interval_steps", 1), ("query_warmup_steps", 0)):
+            if type(getattr(self, name)) is not int or getattr(self, name) < minimum:
+                raise ValueError(f"{name} must be an integer >= {minimum}.")
+        for name in ("event_horizon_seconds", "event_max_height_difference_m"):
+            if not math.isfinite(getattr(self, name)) or getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be finite and positive.")
         if self.ego_eta_mode not in {"public-crossing-step", "causal-self-motion"}:
             raise ValueError("ego_eta_mode must be public-crossing-step or causal-self-motion.")
         if self.stage < 0:

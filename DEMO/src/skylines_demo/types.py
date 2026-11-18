@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 from typing import Literal
 
@@ -228,6 +228,8 @@ class FrameRecord:
 @dataclass(frozen=True)
 class VehicleReplay:
     frames: tuple[FrameRecord, ...]
+    # Internal ID -> source identity; legacy vehicleId replays leave this empty.
+    identities: dict[int, dict[str, str | int]] = field(default_factory=dict)
 
     @property
     def vehicle_ids(self) -> tuple[int, ...]:

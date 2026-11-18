@@ -37,6 +37,8 @@ class RiskTask:
     decision_step: int
     true_risk: bool
     related_vehicle_ids: tuple[int, ...]
+    evaluable: bool = True
+    label_reason: str = "complete"
 
 
 @dataclass(frozen=True)

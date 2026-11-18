@@ -97,9 +97,9 @@ def build_safe_step(obs: RiskObservation, config: RiskCommConfig,
                     continue
                 predictions = [predict_receiver_pair(obs, receiver, obj, task.conflict_point,
                                                     config, scheduled_ego_arrival_seconds=schedule)
-                               for task, schedule in future]
+                               for task, schedule in (future[:1] if config.risk_mode == "pair-events" else future)]
                 # 与现有eligible条件一致；只复用正式模型，不读旧task_id排序。
-                if not any(p.risk and p.distance_m is not None
+                if config.risk_mode != "pair-events" and not any(p.risk and p.distance_m is not None
                            and p.distance_m <= config.conflict_cluster_radius_m + 1e-9
                            for p in predictions):
                     continue
